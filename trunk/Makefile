@@ -1,29 +1,27 @@
 NAME = CUDALucas
 VERSION = 2.03
-OptLevel = 3
-OUT = $(NAME)
 
 CUC = nvcc
-CUFLAGS = -O$(OptLevel) -arch=sm_13 --compiler-options=-Wall
+CUFLAGS = -O3 -arch=sm_13 --compiler-options=-Wall
 CULIB = /usr/local/cuda/lib64
 
 CC = gcc
-CFLAGS = -O$(OptLevel) -Wall
+CFLAGS = -O3 -Wall
 
 L = -lcufft -lcudart -lm
 LDFLAGS = $(CFLAGS) -fPIC -L$(CULIB) $(L)
 
 $(NAME): CUDALucas.o parse.o
-	$(CC) $^ $(LDFLAGS) -o $(OUT)
+	$(CC) $^ $(LDFLAGS) -o $@
 	
 CUDALucas.o: CUDALucas.cu parse.h cuda_safecalls.h
 	$(CUC) $(CUFLAGS) -c $<
 
 parse.o: parse.c
-	$(CC) $(CFLAGS) -c $?
+	$(CC) $(CFLAGS) -c $<
 
 clean: 
 	rm -f *.o
 cleaner:
-	rm -f $(NAME) debug_$(NAME) test_$(NAME)
+	rm -f $(NAME)
 cleanest: clean cleaner
