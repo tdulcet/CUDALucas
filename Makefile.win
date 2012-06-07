@@ -1,0 +1,49 @@
+VER =2.03
+CUDA_VERSION = 3.2
+CUDA_ARCH = sm_13
+BIT = x64
+NAME = CUDALucas$(VER).cuda$(CUDA_VERSION).$(CUDA_ARCH).$(BIT).exe
+OUT = $(NAME)
+
+CUDA = C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v$(CUDA_VERSION)
+LIBS = "$(CUDA)/lib/$(BIT)/cudart.lib" "$(CUDA)/lib/$(BIT)/cufft.lib"
+ifeq ($(CUDA_VERSION),3.2)
+	VCLOC = C:\Program Files (x86)\Microsoft Visual Studio 9.0
+else
+	VCLOC = C:\Program Files (x86)\Microsoft Visual Studio 10.0
+endif
+CCLOC = "$(VCLOC)\VC\bin\amd64"
+
+CUFLAGS = -m64 --ptxas-options=-v -ccbin=$(CCLOC) -D$(BIT) -Xcompiler /EHsc,/W3,/nologo,/Ox,/Oy,/GL -arch=$(CUDA_ARCH) -DDO_NOT_USE_LONG_DOUBLE -D__x86_64__ -O3
+
+CC = $(CCLOC)\cl
+CFLAGS = /Ox /Oy /GL /W4 /fp:fast /nologo
+
+LINK = $(CCLOC)\link
+LFLAGS = /nologo /LTCG #/ltcg:pgo
+
+CUSRC = CUDALucas.cu
+SRC = timeval.c parse.c
+
+CUOBJS = $(CUSRC:.cu=.cuda$(CUDA_VERSION).$(CUDA_ARCH).$(BIT).obj)
+OBJS= $(SRC:.c=.$(BIT).obj)
+
+$(NAME): $(CUOBJS) $(OBJS)
+	$(LINK) $(LFLAGS) $^ $(LIBS) /out:$(OUT)
+
+%.cuda$(CUDA_VERSION).$(CUDA_ARCH).$(BIT).obj: %.cu
+	"$(CUDA)/bin/nvcc" -c $< -o $@ $(CUFLAGS)
+
+%.$(BIT).obj : %.c
+	$(CC) $(CFLAGS) /c $< /Fo$@
+
+clean :
+	del $(OBJS)
+	del $(CUOBJS)
+cleaner: clean
+	del CUDALucas$(VER).cuda$(CUDA_VERSION).$(CUDA_ARCH).$(BIT).exe
+	
+debug: CFLAGS += /DEBUG	
+debug: CUFLAGS += -DEBUG
+debug: OUT = debug_$(NAME)
+debug: $(NAME)
