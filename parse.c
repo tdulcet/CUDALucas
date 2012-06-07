@@ -61,9 +61,38 @@ mfaktc 0.07-0.14 to see Luigis code.
 #include <stdlib.h>
 
 #ifndef linux
-#define strncasecmp _strnicmp
-#define sscanf sscanf_s /* This last one only works for scanning numbers, */
-#endif			/* or strings with a defined length (e.g. "%131s") */
+  #define strncasecmp _strnicmp
+  #define sscanf sscanf_s /* This only works for scanning numbers, or strings with a defined length (e.g. "%131s") */
+
+  #include <winsock2.h>
+  int gettimeofday(struct timeval *tv, struct timezone *unused)
+  /*
+  This is based on a code sniplet from Kevin (kjaget on www.mersenneforum.org)
+
+  This doesn't act like a real gettimeofday(). It has a wrong offset but this is
+  OK since CUDALucas only uses this to measure the time difference between two calls
+  of gettimeofday().
+  */
+  {
+    static LARGE_INTEGER frequency;
+    static int frequency_flag = 0;
+
+    if(!frequency_flag)
+    {
+      QueryPerformanceFrequency(&frequency);
+      frequency_flag = 1;
+    }
+
+    if(tv)
+    {
+      LARGE_INTEGER counter;
+      QueryPerformanceCounter(&counter);
+      tv->tv_sec =  (long) (counter.QuadPart / frequency.QuadPart);
+      tv->tv_usec = (long)((counter.QuadPart % frequency.QuadPart) / ((double)frequency.QuadPart / 1000000.0));
+    }
+    return 0;
+  }
+#endif
 
 #define MAX_LINE_LENGTH 100
 
