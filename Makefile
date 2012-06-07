@@ -5,6 +5,7 @@ OUT = $(NAME)
 
 CUC = nvcc
 CUFLAGS = -O$(OptLevel) -arch=sm_13 --compiler-options=-Wall
+CULIB = /usr/local/cuda/lib64
 # The nVidia CUDA Toolkit will provide both nvcc and the CUDA libraries. If you
 # follow their defaults, the necessary files will be installed in your PATH and
 # LDPATH. Otherwise, you'll need to manually insert their paths here.
@@ -13,7 +14,7 @@ CC = gcc
 CFLAGS = -O$(OptLevel) -Wall
 
 L = -lcufft -lcudart -lm
-LDFLAGS = $(CFLAGS) -fPIC $(L)
+LDFLAGS = $(CFLAGS) -fPIC -L$(CULIB) $(L)
 
 $(NAME): CUDALucas.o parse.o
 	$(CC) $^ $(LDFLAGS) -o $(OUT)
