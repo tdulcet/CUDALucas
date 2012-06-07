@@ -23,7 +23,7 @@ LINK = $(CCLOC)\link
 LFLAGS = /nologo /LTCG #/ltcg:pgo
 
 CUSRC = CUDALucas.cu
-SRC = timeval.c parse.c
+SRC = parse.c
 
 CUOBJS = $(CUSRC:.cu=.cuda$(CUDA_VERSION).$(CUDA_ARCH).$(BIT).obj)
 OBJS= $(SRC:.c=.$(BIT).obj)
@@ -41,7 +41,7 @@ clean :
 	del $(OBJS)
 	del $(CUOBJS)
 cleaner: clean
-	del CUDALucas$(VER).cuda$(CUDA_VERSION).$(CUDA_ARCH).$(BIT).exe
+	del CUDALucas$(VER).$(CUDA_ARCH).$(BIT).exe
 	
 debug: CFLAGS += /DEBUG	
 debug: CUFLAGS += -DEBUG

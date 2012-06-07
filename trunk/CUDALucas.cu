@@ -27,9 +27,10 @@ char program[] = "CUDALucas v2.03";
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cufft.h>
-#include "cuda_safecalls.h"
 
+#include "cuda_safecalls.h"
 #include "parse.h"
+
 #define INIFILE "CUDALucas.ini"
 /*! This will clobber the old ini file on Windows, but I couldn't think of a better name. */
 
@@ -37,12 +38,7 @@ char program[] = "CUDALucas v2.03";
 #include <sys/time.h>
 #include <unistd.h>
 #else
-typedef struct timeval
-{
-  long tv_sec;
-  long tv_usec;
-} timeval;
-extern "C" int gettimeofday (struct timeval *tv, struct timezone *);
+/* Declarations moved to parse.h */
 #endif
 
 /************************ definitions ************************************/
