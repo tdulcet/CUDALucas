@@ -40,16 +40,14 @@ extern "C" int IniGetInt(char* ini_file, char* name, int* value, int dfault);
 extern "C" int IniGetStr(char* ini_file, char* name, char* str, char* dfault);
 extern "C" int file_exists(char* filename); // nonzero if file exists
 
-#ifndef linux
+#ifdef linux
+#include <sys/time.h>
+#include <unistd.h>
+#else
 typedef struct timeval
 {
   long tv_sec;
   long tv_usec;
 } timeval;
 extern "C" int gettimeofday (struct timeval *tv, struct timezone *);
-#else
-/* #include <unistd.h>
-   #include <sys/time.h>
-   Those includes will provide the same functionality in Linux; the actual includes are in CUDALucas.cu.
-*/
 #endif
