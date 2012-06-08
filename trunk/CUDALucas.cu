@@ -784,7 +784,7 @@ init_device (int device_number)
   if (properties.major == 1 && properties.minor < 3)
     {
       printf
-	("A GPU with compute capability >= 1.3 is required for double precision arithmetic\n");
+	("A GPU with compute capability >= 1.3 is required for double precision arithmetic\n\n");
       exit (2);
     }
 }
@@ -853,7 +853,7 @@ printbits (double *x,
       fp = fopen ("result.txt", "a");
       if (fp == NULL)
 	{
-	  fprintf (stderr, "Cannot write results to result.txt\n");
+	  fprintf (stderr, "Cannot write results to %s\n\n", RESULTFILE);
 	  exit (1);
 	}
     }
@@ -1156,7 +1156,8 @@ check (int q, char *expectedResidue)
 	   n = choose_fft_length( n );
       if ((n / threads) > 65535)
 	{
-	  printf ("over specifications Grid = %d\n", (int) n / threads);
+	  fprintf (stderr, "over specifications Grid = %d\n", (int) n / threads);
+	  fprintf (stderr, "try increasing threads or decreasing FFT length\n\n");
 	  exit (2);
 	}
       if (!expectedResidue && !restarting
@@ -1215,7 +1216,7 @@ check (int q, char *expectedResidue)
 		      if (t_f)
 			{
 			  printf
-			    ("iteration = %d >= 1000 && err = %g >= 0.35, fft length = %d, writing checkpoint file (because -t is enabled) and exiting.\n",
+			    ("iteration = %d >= 1000 && err = %g >= 0.35, fft length = %d, writing checkpoint file (because -t is enabled) and exiting.\n\n",
 			     j, (double) terr, (int) n);
 			  cutilSafeCall (cudaMemcpy
 					 (x, g_save, sizeof (double) * n,
@@ -1226,7 +1227,7 @@ check (int q, char *expectedResidue)
 		      else
 			{
 			  printf
-			    ("iteration = %d >= 1000 && err = %g >= 0.35, fft length = %d, not writing checkpoint file (because -t is disabled) and exiting.\n",
+			    ("iteration = %d >= 1000 && err = %g >= 0.35, fft length = %d, not writing checkpoint file (because -t is disabled) and exiting.\n\n",
 			     j, (double) terr, (int) n);
 			  exit (2);
 			}
@@ -1532,9 +1533,9 @@ while (argc > 1)
       	  fprintf (stderr,
 	       "$ CUDALucas -h|-v\n");
       	  fprintf (stderr,
-	       "$ CUDALucas [-d device_number] [-info] [-i INIFILE] [-threads 32|64|128|256|512|1024] [-c checkpoint_iteration] [-f fft_length] [-s folder] [-t] [-polite iteration] [-k] exponent|input_filename\n");
+	       "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads 32|64|128|256|512|1024] [-c checkpoint_iteration] [-f fft_length] [-s folder] [-t] [-polite iteration] [-k] exponent|input_filename\n");
       	  fprintf (stderr,
-	       "$ CUDALucas [-d device_number] [-info] [-i INIFILE] [-threads 32|64|128|256|512|1024] [-t] [-polite iteration] -r\n");
+	       "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads 32|64|128|256|512|1024] [-t] [-polite iteration] -r\n");
       	  fprintf (stderr,
 	       "$ CUDALucas [-d device_number] [-info] -cufftbench start end distance\n");
 	  fprintf (stderr,
@@ -1542,7 +1543,7 @@ while (argc > 1)
 	  fprintf (stderr,
 	       "                       -info print device information\n");
 	  fprintf (stderr,
-	       "                       -i set .ini file name (default = \"CUDALucas.ini\"\n");
+	       "                       -i set .ini file name (default = \"CUDALucas.ini\")\n");
       	  fprintf (stderr,
 	       "                       -threads set threads number (default=256)\n");
       	  fprintf (stderr,
