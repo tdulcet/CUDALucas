@@ -28,7 +28,7 @@ enum ASSIGNMENT_ERRORS
 	CANT_RENAME =6
 };
 
-#define MAX_LINE_LENGTH 100
+#define MAX_LINE_LENGTH 131
 typedef char LINE_BUFFER[MAX_LINE_LENGTH+1];
 
 /*! We must declare these as as such because CUDA is recognized as C++, a different language. See:
