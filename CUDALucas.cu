@@ -1,4 +1,4 @@
-char program[] = "CUDALucas v2.03";
+char program[] = "CUDALucas v2.04 Beta";
 /* CUDALucas.c
    Shoichiro Yamada Oct. 2010 
 
@@ -31,15 +31,13 @@ char program[] = "CUDALucas v2.03";
 #include "cuda_safecalls.h"
 #include "parse.h"
 
-#define INIFILE "CUDALucas.ini"
-/*! This will clobber the old ini file on Windows, but I couldn't think of a better name. */
-
-#ifdef linux
+/* In order to have the gettimeofday() function, you need these includes on Linux:
 #include <sys/time.h>
 #include <unistd.h>
-#else
-/* Declarations moved to parse.h */
-#endif
+On Windows, you need 
+#include <winsock2.h> and a definition for
+int gettimeofday (struct timeval *tv, struct timezone *) {}
+Both platforms are taken care of in parse.h and parse.c. */
 
 /************************ definitions ************************************/
 /* global variables needed */
@@ -58,7 +56,9 @@ float *g_err;
 int *g_carry;
 int *ip, quitting, checkpoint_iter, b, c, fftlen, s_f, t_f, r_f, d_f, k_f;
 int threads, polite, polite_f, bad_selftest=0;
-char folder[132], input_filename[132];
+char folder[132];
+char input_filename[132], RESULTFILE[132];
+char INIFILE[132] = "CUDALucas.ini";
 char s_residue[32];
 
 /* http://www.kurims.kyoto-u.ac.jp/~ooura/fft.html
@@ -748,7 +748,7 @@ init_device (int device_number)
   cudaGetDeviceCount (&device_count);
   if (device_number >= device_count)
     {
-      printf ("device_number >=  device_count ... exiting\n");
+      printf ("device_number >=  device_count ... exiting\n\n");
       exit (2);
     }
   if (d_f)
@@ -894,7 +894,7 @@ printbits (double *x,
 	    }
 	}
       while (totalbits);
-      sprintf (residue, "");
+      residue[0] = 0;
       while (i)
 	{
 	  k = 0;
@@ -1312,7 +1312,7 @@ check (int q, char *expectedResidue)
 		  }
 	      fflush (stdin);
 	    }
-	} /* end main LL for loop */
+	} /* end main LL for-loop */
       if (!restarting && !expectedResidue && !quitting)
 	{
 	  printbits (x, q, n, b, c, high, low, 64, 1, 0);
@@ -1352,7 +1352,7 @@ int main (int argc, char *argv[])
   fftlen = -1;
   s_f = t_f = d_f = k_f = -1;
   polite_f = polite = -1;
-  sprintf(input_filename, "");
+  input_filename[0] = RESULTFILE[0] = 0; /* First character is null terminator */
   
   /* Non-"production" opts */
   r_f = 0;
@@ -1382,14 +1382,16 @@ int main (int argc, char *argv[])
     fprintf(stderr, "Warning: Couldn't parse ini file option DeviceNumber; using default: 0\n");
    if( d_f < 0 &&			!IniGetInt(INIFILE, "PrintDeviceInfo", &d_f, 0) )
     fprintf(stderr, "Warning: Couldn't parse ini file option PrintDeviceInfo; using default: off\n");
-   if( ! input_filename[0] &&		!IniGetStr(INIFILE, "WorkFile", input_filename, "worktodo.txt") )
+   if( !input_filename[0] &&		!IniGetStr(INIFILE, "WorkFile", input_filename, "worktodo.txt") )
+    /* no warning, just silently use the default */;
+   if( !RESULTFILE[0] && 		!IniGetStr(INIFILE, "ResultsFile", RESULTFILE, "result.txt") )
     /* no warning, just silently use the default */;
    if( fftlen < 0 && 			!IniGetInt(INIFILE, "FFTLength", &fftlen, 0) )
     fprintf(stderr, "Warning: Couldn't parse ini file option FFTLength; using autoselect.\n");
   }
   else // no ini file
     {
-      fprintf(stderr, "Warning: No ini file detected. Using defaults for non-specified options.\n");
+      fprintf(stderr, "Warning: Couldn't find .ini file. Using defaults for non-specified options.\n");
       if( checkpoint_iter < 1 ) checkpoint_iter = 10000;
       if( threads < 1 ) threads = 256;
       if( fftlen < 0 ) fftlen = 0;
@@ -1399,7 +1401,8 @@ int main (int argc, char *argv[])
       if( device_number < 0 ) device_number = 0;
       if( d_f < 0 ) d_f = 0;
       if( polite < 0 ) polite = 1;
-      if( ! input_filename[0] ) sprintf(input_filename, "worktodo.txt");
+      if( !input_filename[0] ) sprintf(input_filename, "worktodo.txt");
+      if( !RESULTFILE[0] ) sprintf(RESULTFILE, "result.txt");
   }
   
   if (polite == 0) {
@@ -1489,13 +1492,13 @@ int main (int argc, char *argv[])
 	      error = clear_assignment(input_filename, q);
 	      if(error) {
 	        if( error==3 )
-	          fprintf(stderr, "Can't open workfile %s\n", input_filename);
+	          fprintf(stderr, "Can't open workfile %s\n\n", input_filename);
 	        else if( error==4 )
-	          fprintf(stderr, "Can't open tmp workfile\n");
+	          fprintf(stderr, "Can't open tmp workfile\n\n");
 	        else if( error==5 )
-	          fprintf(stderr, "Assignment M%d completed but not found in workfile\n", q);
+	          fprintf(stderr, "Assignment M%d completed but not found in workfile\n\n", q);
 	        else if( error==6 )
-	          fprintf(stderr, "Cannot move tmp workfile to regular workfile\n");
+	          fprintf(stderr, "Cannot move tmp workfile to regular workfile\n\n");
 	        exit (2);
 	      } //! No error
 	    } //! Not quitting
@@ -1529,17 +1532,19 @@ while (argc > 1)
       	  fprintf (stderr,
 	       "$ CUDALucas -h|-v\n");
       	  fprintf (stderr,
-	       "$ CUDALucas [-d device_number] [-i] [-threads 32|64|128|256|512|1024] [-c checkpoint_iteration] [-f fft_length] [-s folder] [-t] [-polite iteration] [-k] exponent|input_filename\n");
+	       "$ CUDALucas [-d device_number] [-info] [-i INIFILE] [-threads 32|64|128|256|512|1024] [-c checkpoint_iteration] [-f fft_length] [-s folder] [-t] [-polite iteration] [-k] exponent|input_filename\n");
       	  fprintf (stderr,
-	       "$ CUDALucas [-d device_number] [-i] [-threads 32|64|128|256|512|1024] [-t] [-polite iteration] -r\n");
+	       "$ CUDALucas [-d device_number] [-info] [-i INIFILE] [-threads 32|64|128|256|512|1024] [-t] [-polite iteration] -r\n");
       	  fprintf (stderr,
-	       "$ CUDALucas [-d device_number] [-i] -cufftbench start end distance\n");
+	       "$ CUDALucas [-d device_number] [-info] -cufftbench start end distance\n");
 	  fprintf (stderr,
 	       "                       -h print this help message\n");
 	  fprintf (stderr,
-	       "                       -i print device information\n");
+	       "                       -info print device information\n");
+	  fprintf (stderr,
+	       "                       -i set .ini file name (default = \"CUDALucas.ini\"\n");
       	  fprintf (stderr,
-	       "                       -threads set threads number(default=256)\n");
+	       "                       -threads set threads number (default=256)\n");
       	  fprintf (stderr,
 	       "                       -f set fft length (if round off error then exit)\n");
       	  fprintf (stderr,
@@ -1553,7 +1558,7 @@ while (argc > 1)
       	  fprintf (stderr, 
       	       "                       -r exec residue test.\n");
       	  fprintf (stderr,
-	       "                       -k enable keys (p change -polite,t disable -t,s change -s)\n\n");
+	       "                       -k enable keys (p change -polite, t disable -t, s change -s)\n\n");
       	  exit (2);          
       	}
       else if (strcmp (argv[1], "-v") == 0)
@@ -1565,7 +1570,7 @@ while (argc > 1)
 	{
 	  if (argc < 3)
 	    {
-	      fprintf (stderr, "can't parse -polite option\n");
+	      fprintf (stderr, "can't parse -polite option\n\n");
 	      exit (2);
 	    }
 	  polite = atoi (argv[2]);
@@ -1593,7 +1598,7 @@ while (argc > 1)
 	{
 	  if (argc < 3)
 	    {
-	      fprintf (stderr, "can't parse -d option\n");
+	      fprintf (stderr, "can't parse -d option\n\n");
 	      exit (2);
 	    }
 	  *device_number = atoi (argv[2]);
@@ -1601,6 +1606,17 @@ while (argc > 1)
 	  argc -= 2;
 	}
       else if (strcmp (argv[1], "-i") == 0)
+	{
+	  if(argc < 3)
+	    {
+	      fprintf (stderr, "can't parse -i option\n\n");
+	      exit (2);
+	    }
+	  sprintf (INIFILE, "%s", argv[2]);
+	  argv += 2;
+	  argc -= 2;
+	}
+      else if (strcmp (argv[1], "-info") == 0)
         {
           d_f = 1;
           argv++;
@@ -1610,7 +1626,7 @@ while (argc > 1)
 	{
 	  if (argc < 5)
 	    {
-	      fprintf (stderr, "can't parse -cufftbench option\n");
+	      fprintf (stderr, "can't parse -cufftbench option\n\n");
 	      exit (2);
 	    }
 	  *cufftbench_s = atoi (argv[2]);
@@ -1623,7 +1639,7 @@ while (argc > 1)
 	{
 	  if (argc < 3)
 	    {
-	      fprintf (stderr, "can't parse -threads option\n");
+	      fprintf (stderr, "can't parse -threads option\n\n");
 	      exit (2);
 	    }
 	  threads = atoi (argv[2]);
@@ -1631,7 +1647,7 @@ while (argc > 1)
 	      && threads != 256 && threads != 512 && threads != 1024)
 	    {
 	      fprintf(stderr, "Error: thread count is invalid.\n");
-	      fprintf(stderr, "Threads must be 2^k, 5 <= k <= 10.\n");
+	      fprintf(stderr, "Threads must be 2^k, 5 <= k <= 10.\n\n");
 	      exit (2);
 	    }
 	  argv += 2;
@@ -1641,13 +1657,13 @@ while (argc > 1)
 	{
 	  if (argc < 3)
 	    {
-	      fprintf (stderr, "can't parse -c option\n");
+	      fprintf (stderr, "can't parse -c option\n\n");
 	      exit (2);
 	    }
 	  checkpoint_iter = atoi (argv[2]);
 	  if (checkpoint_iter == 0)
 	    {
-	      fprintf (stderr, "can't parse -c option\n");
+	      fprintf (stderr, "can't parse -c option\n\n");
 	      exit (2);
 	    }
 	  argv += 2;
@@ -1657,7 +1673,7 @@ while (argc > 1)
 	{
 	  if (argc < 3)
 	    {
-	      fprintf (stderr, "can't parse -f option\n");
+	      fprintf (stderr, "can't parse -f option\n\n");
 	      exit (2);
 	    }
 	  fftlen = atoi (argv[2]);
@@ -1669,7 +1685,7 @@ while (argc > 1)
 	  s_f = 1;
 	  if (argc < 3)
 	    {
-	      fprintf (stderr, "can't parse -s option\n");
+	      fprintf (stderr, "can't parse -s option\n\n");
 	      exit (2);
 	    }
 	  sprintf (folder, "%s", argv[2]);
@@ -1680,7 +1696,7 @@ while (argc > 1)
 	{
 	  if (*q != -1 || strcmp (input_filename, "") != 0 )
 	    {
-	      fprintf (stderr, "can't parse options\n");
+	      fprintf (stderr, "can't parse options\n\n");
 	      exit (2);
 	    }
 	  int derp = atoi (argv[1]);

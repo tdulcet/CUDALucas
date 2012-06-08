@@ -1,4 +1,4 @@
-VER =2.03
+VER =2.04 Beta
 CUDA_VERSION = 3.2
 CUDA_ARCH = sm_13
 BIT = x64

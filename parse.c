@@ -60,10 +60,28 @@ mfaktc 0.07-0.14 to see Luigis code.
 #include <errno.h>
 #include <stdlib.h>
 
-#ifndef linux
+#define MAX_LINE_LENGTH 131
+
+#ifdef linux
+  #define _fopen fopen
+  #define strcopy strncpy
+#else
   #define strncasecmp _strnicmp
   #define sscanf sscanf_s /* This only works for scanning numbers, or strings with a defined length (e.g. "%131s") */
 
+  void strcopy(char* dest, char* src, size_t n) 
+  {
+    strncpy_s(dest, MAX_LINE_LENGTH+1, src, n);
+  }
+
+  FILE* _fopen(const char* path, const char* mode) 
+  {
+    FILE* stream;
+    errno_t err = fopen_s(&stream, path, mode);
+    if(err) return NULL;
+    else return stream;
+  }
+  
   #include <winsock2.h>
   int gettimeofday(struct timeval *tv, struct timezone *unused)
   /*
@@ -94,29 +112,10 @@ mfaktc 0.07-0.14 to see Luigis code.
   }
 #endif
 
-#define MAX_LINE_LENGTH 100
-
-void strcopy(char* dest, char* src, size_t n) 
-{
-#ifdef linux
-	strncpy(dest, src, n);
-#else
-	strncpy_s(dest, MAX_LINE_LENGTH+1, src, n);
-#endif
-}
-
-FILE* _fopen(const char* path, const char* mode) {
-#ifdef linux
-	return fopen(path, mode);
-#else
-	FILE* stream;
-	errno_t err = fopen_s(&stream, path, mode);
-	if(err) return NULL;
-	else return stream;
-#endif
-}
+/***********************************************************************************************************/
 
 int file_exists(char* name) {
+  if(name && name[0]) { /* Check for null string */
 	FILE* stream;
 	if((stream = _fopen(name, "r")))
 	  {  
@@ -124,6 +123,7 @@ int file_exists(char* name) {
 	    return 1;
 	  }
 	else return 0;
+  } else return 0;
 }
 
 int isprime(unsigned int n)
