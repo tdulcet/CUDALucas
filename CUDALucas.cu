@@ -1,4 +1,4 @@
-char program[] = "CUDALucas v2.04 Beta";
+char program[] = "CUDALucas v2.04 Alpha";
 /* CUDALucas.c
    Shoichiro Yamada Oct. 2010 
 
@@ -57,7 +57,7 @@ int *g_carry;
 int *ip, quitting, checkpoint_iter, b, c, fftlen, s_f, t_f, r_f, d_f, k_f;
 int threads, polite, polite_f, bad_selftest=0;
 char folder[132];
-char input_filename[132], RESULTFILE[132];
+char input_filename[132], RESULTSFILE[132];
 char INIFILE[132] = "CUDALucas.ini";
 char s_residue[32];
 
@@ -850,10 +850,10 @@ printbits (double *x,
   FILE *fp=NULL;
   if (flag)
     {
-      fp = fopen ("result.txt", "a");
+      fp = fopen (RESULTSFILE, "a");
       if (fp == NULL)
 	{
-	  fprintf (stderr, "Cannot write results to %s\n\n", RESULTFILE);
+	  fprintf (stderr, "Cannot write results to %s\n\n", RESULTSFILE);
 	  exit (1);
 	}
     }
@@ -1023,7 +1023,7 @@ write_checkpoint (double *x, int q, int n, int j)
   fwrite (&j, 1, sizeof (j), fPtr);
   fwrite (x, 1, sizeof (double) * n, fPtr);
   fclose (fPtr);
-  if (s_f == 1)			// save all chekpoint file
+  if (s_f > 0)			// save all checkpoint files
     {
       char chkpnt_sfn[64];
 #ifdef linux
@@ -1053,15 +1053,15 @@ cufftbench (int cufftbench_s, int cufftbench_e, int cufftbench_d)
 	  cufftbench_e, cufftbench_d);
 
   cutilSafeCall (cudaMalloc ((void **) &g_x, sizeof (double) * cufftbench_e));
-  x = ((double *) malloc (sizeof (double) * cufftbench_e));
-  for (i = 0; i < cufftbench_e; i++)
+  x = ((double *) malloc (sizeof (double) * cufftbench_e + 1));
+  for (i = 0; i <= cufftbench_e; i++)
     x[i] = 0;
   cutilSafeCall (cudaMemcpy
 		 (g_x, x, sizeof (double) * cufftbench_e,
 		  cudaMemcpyHostToDevice));
   cutilSafeCall (cudaEventCreate (&start));
   cutilSafeCall (cudaEventCreate (&stop));
-  for (j = cufftbench_s; j < cufftbench_e; j += cufftbench_d)
+  for (j = cufftbench_s; j <= cufftbench_e; j += cufftbench_d)
     {
       cufftSafeCall (cufftPlan1d (&plan, j / 2, CUFFT_Z2Z, 1));
       cufftSafeCall (cufftExecZ2Z
@@ -1088,7 +1088,8 @@ void
 SetQuitting (int sig)
 {
   quitting = 1;
-  printf (" caught.  Writing checkpoint.\n\n");
+ sig==SIGTERM ? fprintf(stderr, "\nSIGTERM") : (sig==SIGINT ? fprintf(stderr, "\nSIGINT") : fprintf(stderr, "\nUnknown signal")) ;
+ fprintf(stderr, " caught. Writing checkpoint.\n\n");
 }
 
 #ifdef linux
@@ -1150,8 +1151,8 @@ check (int q, char *expectedResidue)
       if (fftlen)
 	   n = fftlen;
 	 else
-	#ifdef TEST
-        printf("Exp = %d, Exp/20 = %d\n", q, q/20);
+	   #ifdef TEST
+        print("Exp = %d, Exp/20 = %d\n", q, q/20);
         #endif
 	   n = choose_fft_length( n );
       if ((n / threads) > 65535)
@@ -1337,7 +1338,7 @@ int main (int argc, char *argv[])
 
 /*! Old default settings; kept here just in case.
   sprintf (input_filename, "");
-  checkpoint_iter = 10000;
+  checkpoint_/iter = 10000;
   threads = 256;
   fftlen = 0;
   quitting = 0;
@@ -1353,7 +1354,7 @@ int main (int argc, char *argv[])
   fftlen = -1;
   s_f = t_f = d_f = k_f = -1;
   polite_f = polite = -1;
-  input_filename[0] = RESULTFILE[0] = 0; /* First character is null terminator */
+  input_filename[0] = RESULTSFILE[0] = 0; /* First character is null terminator */
   
   /* Non-"production" opts */
   r_f = 0;
@@ -1384,9 +1385,10 @@ int main (int argc, char *argv[])
    if( d_f < 0 &&			!IniGetInt(INIFILE, "PrintDeviceInfo", &d_f, 0) )
     fprintf(stderr, "Warning: Couldn't parse ini file option PrintDeviceInfo; using default: off\n");
    if( !input_filename[0] &&		!IniGetStr(INIFILE, "WorkFile", input_filename, "worktodo.txt") )
-    /* no warning, just silently use the default */;
-   if( !RESULTFILE[0] && 		!IniGetStr(INIFILE, "ResultsFile", RESULTFILE, "result.txt") )
-    /* no warning, just silently use the default */;
+    fprintf(stderr, "Warning: Couldn't parse ini file option WorkFile; using default \"worktodo.txt\"\n");
+    /* I've readded the warnings about worktodo and results due to the planned multiple-instances-in-one-dir feature. */
+   if( !RESULTSFILE[0] && 		!IniGetStr(INIFILE, "ResultsFile", RESULTSFILE, "results.txt") )
+    fprintf(stderr, "Warning: Couldn't parse ini file option ResultsFile; using default \"results.txt\"\n");
    if( fftlen < 0 && 			!IniGetInt(INIFILE, "FFTLength", &fftlen, 0) )
     fprintf(stderr, "Warning: Couldn't parse ini file option FFTLength; using autoselect.\n");
   }
@@ -1403,7 +1405,7 @@ int main (int argc, char *argv[])
       if( d_f < 0 ) d_f = 0;
       if( polite < 0 ) polite = 1;
       if( !input_filename[0] ) sprintf(input_filename, "worktodo.txt");
-      if( !RESULTFILE[0] ) sprintf(RESULTFILE, "result.txt");
+      if( !RESULTSFILE[0] ) sprintf(RESULTSFILE, "result.txt");
   }
   
   if (polite == 0) {
