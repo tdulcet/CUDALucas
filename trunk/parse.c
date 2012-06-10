@@ -564,5 +564,5 @@ int IniGetStr(char *inifile, char *name, char *string, char* dflt)
   }
   fclose(in);
   if(found)return 1;
-  error: string = dflt; return 0;
+  error: sprintf(string, "%s", dflt); return 0;
 }
