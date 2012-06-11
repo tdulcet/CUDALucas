@@ -65,6 +65,7 @@ mfaktc 0.07-0.14 to see Luigis code.
 #ifdef linux
   #define _fopen fopen
   #define strcopy strncpy
+  #define spritf sprintf
 #else
   #define strncasecmp _strnicmp
   #define sscanf sscanf_s /* This only works for scanning numbers, or strings with a defined length (e.g. "%131s") */
@@ -82,6 +83,12 @@ mfaktc 0.07-0.14 to see Luigis code.
     else return stream;
   }
   
+  //added to make MSVS happy
+  void spritf(char* buf, char* frmt, char* string)
+  {	  
+	  sprintf_s(buf, MAX_LINE_LENGTH+1, frmt, string);
+  }
+
   #include <winsock2.h>
   int gettimeofday(struct timeval *tv, struct timezone *unused)
   /*
@@ -564,5 +571,5 @@ int IniGetStr(char *inifile, char *name, char *string, char* dflt)
   }
   fclose(in);
   if(found)return 1;
-  error: sprintf(string, "%s", dflt); return 0;
+  error: spritf(string, "%s", dflt); return 0;
 }
