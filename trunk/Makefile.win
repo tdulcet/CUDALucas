@@ -29,7 +29,7 @@ CUOBJS = $(CUSRC:.cu=.cuda$(CUDA_VERSION).$(CUDA_ARCH).$(BIT).obj)
 OBJS= $(SRC:.c=.$(BIT).obj)
 
 $(NAME): $(CUOBJS) $(OBJS)
-	$(LINK) $(LFLAGS) $^ $(LIBS) /out:$(OUT)
+	$(LINK) $(LFLAGS) $^ $(LIBS) /out:"$(OUT)"
 
 %.cuda$(CUDA_VERSION).$(CUDA_ARCH).$(BIT).obj: %.cu
 	"$(CUDA)/bin/nvcc" -c $< -o $@ $(CUFLAGS)
@@ -41,7 +41,7 @@ clean :
 	del $(OBJS)
 	del $(CUOBJS)
 cleaner: clean
-	del CUDALucas$(VER)-$(CUDA_VERSION)-$(CUDA_ARCH)-$(BIT).exe
+	del "$(NAME)"
 	
 debug: CFLAGS += /DEBUG	
 debug: CUFLAGS += -DEBUG
