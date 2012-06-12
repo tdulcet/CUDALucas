@@ -508,7 +508,7 @@ enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, int* f
   if (NO_WARNING == value)
   {
     *exponent = assignment.exponent;
-    if(fft_length > 0) *fft_length = assignment.fft_length;
+    if(assignment.fft_length > 0) *fft_length = assignment.fft_length;
     
     if (key!=NULL)strcopy(*key, assignment.hex_key, MAX_LINE_LENGTH+1);
     
