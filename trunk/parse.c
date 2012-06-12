@@ -62,12 +62,14 @@ mfaktc 0.07-0.14 to see Luigis code.
 
 #define MAX_LINE_LENGTH 131
 
-#ifdef linux
+#ifdef linux /* See next comment */
   #define _fopen fopen
   #define strcopy strncpy
   #define _sprintf sprintf
 #else
   #define strncasecmp _strnicmp
+  
+  /* Everything from here to the next include is to make MSVS happy. */
   #define sscanf sscanf_s /* This only works for scanning numbers, or strings with a defined length (e.g. "%131s") */
 
   void strcopy(char* dest, char* src, size_t n) 
@@ -83,7 +85,6 @@ mfaktc 0.07-0.14 to see Luigis code.
     else return stream;
   }
   
-  //added to make MSVS happy
   void _sprintf(char* buf, char* frmt, char* string)
   {	  
 	  sprintf_s(buf, MAX_LINE_LENGTH+1, frmt, string);
@@ -202,9 +203,7 @@ struct ASSIGNMENT
 	int exponent;
 	int fft_length;
 	char hex_key[MAX_LINE_LENGTH+1];	// optional assignment key....
-	char comment[MAX_LINE_LENGTH+1];	// optional comment.
-						// if it has a newline at the end, it was on a line by itself preceding the assignment.
-						// otherwise, it followed the assignment on the same line.
+	char comment[MAX_LINE_LENGTH+1];	// optional comment -- it followed the assignment on the same line.
 };
 // Should we include FFT length in this?
 
@@ -230,8 +229,8 @@ output
 
   int scanpos;
   int number_of_commas; // Originally this was unsigned, causing lots of problems in my outer for(), and it took me a while to track down :P
-  			// (It didn't help that I was printf'ing '%d' for an unsigned int, so that masked the problem to look correct. :P)
-  int comment_on_line = 0; // Set to the delimiting char if the line has a comment, but not the whole line.
+  			// (It didn't help that I was printf'ing '%d' for an unsigned int, thus masking the problem to look correct. :P)
+  int comment_on_line = 0; // Set to the delimiting char if the line has a comment following the assignment.
 
   unsigned long proposed_exponent;
   unsigned long proposed_fftlen;
@@ -342,7 +341,7 @@ output
         #endif
         strcopy(assignment->hex_key, ptr, 1+(ptr_end - ptr));	// copy the comma..
         *strchr(assignment->hex_key, ',') = '\0';	// null-terminate key
-        goto outer_cont;
+        goto outer_continue;
       }
       else if( *ptr_start == 'k' || *ptr_start == 'K' ) {
       // we've found a fft length field.
@@ -352,11 +351,11 @@ output
         errno = 0;
         proposed_fftlen = strtoul(ptr, &ptr2, 10) * 1024; // Don't forget the K ;)
         if(ptr == ptr2 || ptr2 < ptr_start) // the second condition disallows space between the num and K, so "1444 K" will fail,
-          return INVALID_FORMAT;            // but it also disallows "1rrrK", so I think it's worth it 
+          return INVALID_FORMAT;            // but it also disallows "1rrrK", so I think it's worth it.
         if(errno != 0 || proposed_fftlen > INT_MAX)
           return INVALID_DATA;
         assignment->fft_length = proposed_fftlen;
-        goto outer_cont;
+        goto outer_continue;
       }
       else if( *ptr_start == 'm' || *ptr_start == 'M' ) {
       // we've found a fft length field.
@@ -366,13 +365,13 @@ output
         errno = 0;
         proposed_fftlen = strtoul(ptr, &ptr2, 10) * 1024*1024; // Don't forget the M ;)
         if(ptr == ptr2 || ptr2 < ptr_start) // the second condition disallows space between the num and K, so "1444 M" will fail,
-          return INVALID_FORMAT;            // but it also disallows "1rrrK", so I think it's worth it 
+          return INVALID_FORMAT;            // but it also disallows "1rrrK", so I think it's worth it.
         if(errno != 0 || proposed_fftlen > INT_MAX)
           return INVALID_DATA;
         assignment->fft_length = proposed_fftlen;
-        goto outer_cont;
+        goto outer_continue;
         
-      } else { // Not special, but we must continue checking the rest of the chars in the field
+      } else { // Not special, so we must continue checking the rest of the chars in the field
         continue;
       }     
     } // end inner for()
@@ -397,7 +396,7 @@ output
     if( proposed_exponent > assignment->exponent ) // don't clobber larger values, this is our TF/P-1 filter
       assignment->exponent = (int)proposed_exponent;
     
-    outer_cont: /* One nice feature Python has is putting "else"s on loops, only to be executed when NOT "break"-ed from.
+    outer_continue: /* One nice feature Python has is putting "else"s on loops, only to be executed when NOT "break"-ed from.
                  That's exactly what I'm duplicating here with the inner loop and default "expo" branching. */
     ptr = 1 + ptr_end; // Reset for the next field (*ptr == '\n' || *ptr == comment-delimiter when we're done)
   } // end outer for()
