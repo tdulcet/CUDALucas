@@ -1527,7 +1527,7 @@ int main (int argc, char *argv[])
 	#endif
 	do { //! while(!quitting)
   	  error = get_next_assignment(input_filename, &q, &fftlen, &AID);
-  	  /* Guaranteed to write to fftlen ONLY if not specified on workfile line, so that if unspecified, the pre-set
+  	  /* Guaranteed to write to fftlen ONLY if specified on workfile line, so that if unspecified, the pre-set
   	  default is kept. */
 	  if( error ) exit (2); 
 	  //! get_next_assignment prints warning message
