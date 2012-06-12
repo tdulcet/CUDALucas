@@ -748,7 +748,8 @@ init_device (int device_number)
   cudaGetDeviceCount (&device_count);
   if (device_number >= device_count)
     {
-      printf ("device_number >=  device_count ... exiting\n\n");
+      printf ("device_number >=  device_count ... exiting\n");
+      printf ("(This is probably a driver problem)\n\n");
       exit (2);
     }
   if (d_f)
@@ -1185,11 +1186,11 @@ check (int q, char *expectedResidue)
       if (!expectedResidue && !restarting
 	  && (x = read_checkpoint (q, &n, &j, &total_time)) != NULL)
 	printf
-	  ("Continuing work from a partial result of M%d fft length = %d iteration = %d\n",
-	   q, n, j);
+	  ("Continuing work from a partial result of M%d fft length = %dK iteration = %d\n",
+	   q, n/1024, j);
       else
 	{
-	  printf ("Starting M%d fft length = %d\n", q, n);
+	  printf ("Starting M%d fft length = %dK\n", q, n/1024);
 	  x = (double *) malloc (sizeof (double) * (n + n));
 	  for (k = 1; k < (unsigned int)n; k++)
 	    x[k] = 0.0;
@@ -1225,8 +1226,8 @@ check (int q, char *expectedResidue)
 		      if (!fftlen)
 			{	/* n is not big enough; increase it and start over */
 			  printf
-			    ("iteration = %d < 1000 && err = %g >= 0.25, increasing n from %d\n",
-			     j, (double) terr, (int) n);
+			    ("iteration = %d < 1000 && err = %g >= 0.25, increasing n from %dK\n",
+			     j, (double) terr, (int) n/1024);
 			  n++;
 			  restarting = 1;
 			}
@@ -1520,12 +1521,14 @@ int main (int argc, char *argv[])
       if (q <= 0)
       {
         int error;
-	LINE_BUFFER AID; //! Assignment key; not useful as of yet
+	char AID[132]; //! Assignment key; not useful as of yet
 	#ifdef EBUG
 	printf("Processed INI file and console arguments correctly; about to call get_next_assignment().\n");
 	#endif
 	do { //! while(!quitting)
-  	  error = get_next_assignment(input_filename, &q, &AID, 1); //! Use default verbosity of 1
+  	  error = get_next_assignment(input_filename, &q, &fftlen, &AID);
+  	  /* Guaranteed to write to fftlen ONLY if not specified on workfile line, so that if unspecified, the pre-set
+  	  default is kept. */
 	  if( error ) exit (2); 
 	  //! get_next_assignment prints warning message
 	  #ifdef EBUG
@@ -1551,7 +1554,7 @@ int main (int argc, char *argv[])
 	  } while(!quitting);  
     } else //! Exponent passed in as argument
 	{
-	  if (!valid_assignment(q)) {printf("\n");} //! v_a prints warning
+	  if (!valid_assignment(q, fftlen)) {printf("\n");} //! v_a prints warning
 	  else {
 	    check (q, 0);
 	  }
