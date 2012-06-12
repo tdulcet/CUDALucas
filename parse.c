@@ -65,7 +65,7 @@ mfaktc 0.07-0.14 to see Luigis code.
 #ifdef linux
   #define _fopen fopen
   #define strcopy strncpy
-  #define spritf sprintf
+  #define _sprintf sprintf
 #else
   #define strncasecmp _strnicmp
   #define sscanf sscanf_s /* This only works for scanning numbers, or strings with a defined length (e.g. "%131s") */
@@ -84,7 +84,7 @@ mfaktc 0.07-0.14 to see Luigis code.
   }
   
   //added to make MSVS happy
-  void spritf(char* buf, char* frmt, char* string)
+  void _sprintf(char* buf, char* frmt, char* string)
   {	  
 	  sprintf_s(buf, MAX_LINE_LENGTH+1, frmt, string);
   }
@@ -154,7 +154,7 @@ returns
   return 1;
 }
 
-int valid_assignment(int exp)
+int valid_assignment(int exp, int fftlen)
 /*
 returns 1 if the assignment is within the supported bounds of CUDALucas,
 0 otherwise.
@@ -162,9 +162,13 @@ returns 1 if the assignment is within the supported bounds of CUDALucas,
 {
   int ret = 1;
   
-       if(exp < 86243)      {ret = 0; fprintf(stderr, "Warning: exponents < 86243 are not supported!\n");}
-  else if(!isprime(exp))      {ret = 0; fprintf(stderr, "Warning: exponent is not prime!\n");}
-  //! Perhaps add a largest exponent?  
+	// Perhaps add a largest exponent?  
+	if(exp < 86243)       {ret = 0; fprintf(stderr, "Warning: exponents < 86243 are not supported!\n");}
+	if(!isprime(exp))     {ret = 0; fprintf(stderr, "Warning: exponent is not prime!\n");}
+	if(fftlen % (128*32)) {ret = 0; fprintf(stderr, "Warning: FFT length is invalid. See CUDALucas.ini for details about valid lengths.\n");}
+	// This doesn't guarantee that it *is* valid, but it will catch horribly bad lengths. 
+	// (To do more checking, we'd need access the "threads" variable from CUDALucas.cu.
+	
   return ret;
 }
 
@@ -196,12 +200,13 @@ enum PARSE_WARNINGS
 struct ASSIGNMENT
 {
 	int exponent;
-	char assignment_key[MAX_LINE_LENGTH+1];	// optional assignment key....
+	int fft_length;
+	char hex_key[MAX_LINE_LENGTH+1];	// optional assignment key....
 	char comment[MAX_LINE_LENGTH+1];	// optional comment.
 						// if it has a newline at the end, it was on a line by itself preceding the assignment.
 						// otherwise, it followed the assignment on the same line.
 };
-//! Should we include FFT length in this?
+// Should we include FFT length in this?
 
 // note:  parse_worktodo_line() is a function that
 //	returns the text of the line, the assignment data structure, and a success code.
@@ -216,55 +221,62 @@ output
 */
 {
   #ifdef EBUG
-  printf("Entered parse_worktodo.\n");
+  printf("Entered p_w_l\n");
   #endif
-  char line[MAX_LINE_LENGTH+1], *ptr, *ptr_start, *ptr_end;
-  int c;	// extended char pulled from stream;
+  char line[MAX_LINE_LENGTH+1], *ptr, *ptr_start, *ptr_end, *ptr2;
+  
+  /* See below about LONG_LINE */
+  //int c;	// extended char pulled from stream;
 
-  unsigned int scanpos;
-  unsigned int number_of_commas;
+  int scanpos;
+  int number_of_commas; // Originally this was unsigned, causing lots of problems in my outer for(), and it took me a while to track down :P
+  			// (It didn't help that I was printf'ing '%d' for an unsigned int, so that masked the problem to look correct. :P)
+  int comment_on_line = 0; // Set to the delimiting char if the line has a comment, but not the whole line.
 
-  enum PARSE_WARNINGS reason = NO_WARNING;
+  unsigned long proposed_exponent;
+  unsigned long proposed_fftlen;
+  assignment->fft_length = 0;
+  assignment->exponent = 0;
+  assignment->hex_key[0] = 0;
 
-  int proposed_exponent;
-  #ifdef EBUG
-  printf("About to call fgets().\n");
-  #endif
   if(NULL==fgets(line, MAX_LINE_LENGTH+1, f_in))
   {
     return END_OF_FILE;
   }
-  #ifdef EBUG
-  printf("Called fgets().\n");
-  #endif
+
   if (linecopy != NULL)	{ // maybe it wasn't needed....
     strcopy(*linecopy, line, MAX_LINE_LENGTH+1);	// this is what was read...
     if( NULL != strchr(*linecopy, '\n') )
       *strchr(*linecopy, '\n') = '\0';
   }
   if((strlen(line) == MAX_LINE_LENGTH) && (!feof(f_in)) && (line[strlen(line)-1] !='\n') ) // long lines disallowed,
-  {
-    reason = LONG_LINE;
+  {  
+    return LONG_LINE;
+    // I see no reason to go to all of the following fuss
+    
+    /*reason = LONG_LINE;
     do
     {
       c = fgetc(f_in);
       if ((EOF == c) ||(iscntrl(c)))	// found end of line
         break;
     }
-    while(1);
+    while(1); */
   }
 
   if (linecopy != NULL)
     *endptr = *linecopy;	// by default, non-significant content is whole line
+  
   #ifdef EBUG
-  printf("Starting to parse line...\n");
+  printf("Line: %s", line);
   #endif
+
   ptr=line;
   while (('\0'!=ptr[0]) && isspace(ptr[0]))	// skip leading spaces
     ptr++;
   if ('\0' == ptr[0])	// blank line...
     return BLANK_LINE;
-  if( ('\\'== ptr[0]) && ('\\'==ptr[1]) )
+  if( ('\\'== ptr[0]) && ('\\'==ptr[1]) ) 
     return NONBLANK_LINE;		// it's a comment, so ignore....don't care about long lines either..
   if( ('/' == ptr[0]) && ('/'==ptr[1]) )
     return NONBLANK_LINE;		// it's a comment, so ignore....don't care about long lines either..
@@ -274,10 +286,8 @@ output
        (strncasecmp("DoubleCheck=", ptr, 12) != 0) ) // does the line start with "Test=" or "DoubleCheck="? 
                                                      // (case-insensitive)
     return NO_TEST_EQUAL;
-  #ifdef EBUG
-  printf("Found a Test=...\n");
-  #endif
-  ptr = 1+ strstr(ptr,"=");	// don't rescan..
+
+  ptr = 1+ strchr(ptr, '=');	// don't rescan..
   while (('\0'!=ptr[0]) && isspace(ptr[0]))	// ignore blanks...
     ptr++;
   number_of_commas = 0;
@@ -285,75 +295,164 @@ output
   {
     if(ptr[scanpos] == ',')
       number_of_commas++; // count the number of ',' in the line
-    if ((ptr[scanpos] == '\\') && (ptr[scanpos+1] == '\\'))
+    if ((ptr[scanpos] == '\\') && (ptr[scanpos+1] == '\\')) {
+      comment_on_line = '\\';
       break;	// comment delimiter
-    if ((ptr[scanpos] == '/') && (ptr[scanpos+1] == '/'))
+    }
+    if ((ptr[scanpos] == '/') && (ptr[scanpos+1] == '/')) {
+      comment_on_line = '/';
       break;	// //comment delimiter
-    if (ptr[scanpos] == '#')
+    }
+    if (ptr[scanpos] == '#') {
+      comment_on_line = '#';
       break;    // comment delimiter
+    }
   }
   #ifdef EBUG
-  printf("Counted commas...\n");
+  printf("Scanned %d commas\n", number_of_commas);
   #endif
-  if ((number_of_commas > 3))	// must have less than 4 commas...
-                            //! If we implement FFT in line, we will need 3 commas
+  if (number_of_commas > 4)	// must have less than 5 commas... (possible fields are key,exp,fft,tf,p-1)
     return INVALID_FORMAT;
     
-  if(number_of_commas <= 1) {
-    assignment->assignment_key[0] = '\0';
-  } else
-  {  
-    strcopy(assignment->assignment_key,ptr,1+(strstr(ptr,",")-ptr) );	// copy the comma..
-    *strstr(assignment->assignment_key,",") = '\0';	// null-terminate key
-    ptr=1 + strstr(ptr,",");
-  }
+  for(; number_of_commas >= 0; number_of_commas--) {
+    // i is number of commas ahead of ptr (or, there's one more field than commas, so iterate n+1 times)
+    while (isspace(ptr[0]))	// ignore blanks...
+      ptr++;
+    if(number_of_commas > 0) // then there's at least one comma left
+      ptr_end = strchr(ptr, ','); // guaranteed that strchr isn't null because of the if
+    else if(comment_on_line) // no more commas, but there is a comment
+      ptr_end = strchr(ptr, comment_on_line); // (see declaration of c_on_l or lines 285,289,293 for explanation)
+    else { // no commas or comments
+      ptr_end = strchr(ptr, '\n');
+      if(ptr_end == NULL)
+        ptr_end = strchr(ptr, '\0');
+    }
+    #ifdef EBUG
+    printf("In main for() loop, %d commas left\n", number_of_commas);
+    #endif
+    for(ptr_start = ptr; ptr_start < ptr_end; ptr_start++) { 
+      
+      #ifdef EBUG
+      printf("Looping on chars, ptr_start = %c\n", *ptr_start);
+      #endif
+      if( ('A' <= *ptr_start && *ptr_start <= 'F') || ('a' <= *ptr_start && *ptr_start <= 'f') ) {
+      // we have some sort of hex assignment key, or "N/A". Either way, it's an AID of some sort.
+        #ifdef EBUG
+        printf("Branched on AID, trigger is %c\n", *ptr_start);
+        #endif
+        strcopy(assignment->hex_key, ptr, 1+(ptr_end - ptr));	// copy the comma..
+        *strchr(assignment->hex_key, ',') = '\0';	// null-terminate key
+        goto outer_cont;
+      }
+      else if( *ptr_start == 'k' || *ptr_start == 'K' ) {
+      // we've found a fft length field.
+        #ifdef EBUG
+        printf("Branched on FFT-K\n");
+        #endif
+        errno = 0;
+        proposed_fftlen = strtoul(ptr, &ptr2, 10) * 1024; // Don't forget the K ;)
+        if(ptr == ptr2 || ptr2 < ptr_start) // the second condition disallows space between the num and K, so "1444 K" will fail,
+          return INVALID_FORMAT;            // but it also disallows "1rrrK", so I think it's worth it 
+        if(errno != 0 || proposed_fftlen > INT_MAX)
+          return INVALID_DATA;
+        assignment->fft_length = proposed_fftlen;
+        goto outer_cont;
+      }
+      else if( *ptr_start == 'm' || *ptr_start == 'M' ) {
+      // we've found a fft length field.
+        #ifdef EBUG
+        printf("Branched on FFT-M\n");
+        #endif
+        errno = 0;
+        proposed_fftlen = strtoul(ptr, &ptr2, 10) * 1024*1024; // Don't forget the M ;)
+        if(ptr == ptr2 || ptr2 < ptr_start) // the second condition disallows space between the num and K, so "1444 M" will fail,
+          return INVALID_FORMAT;            // but it also disallows "1rrrK", so I think it's worth it 
+        if(errno != 0 || proposed_fftlen > INT_MAX)
+          return INVALID_DATA;
+        assignment->fft_length = proposed_fftlen;
+        goto outer_cont;
+        
+      } else { // Not special, but we must continue checking the rest of the chars in the field
+        continue;
+      }     
+    } // end inner for()
+    // Now we know there's nothing special about this field, so
+    // we must assume it's the exponent, except to assume that the largest number 
+    // read in is the exponent (to filter out TF lim or P-1 bool)
+    #ifdef EBUG
+    printf("Branched on default\n");
+    #endif
+    ptr_start = ptr; /* Nothing special, so reset ptr_start to the start */
+    if ('M' == *ptr_start)	// M means Mersenne exponent...
+      ptr_start++;
+    errno = 0;
+    proposed_exponent = strtoul(ptr_start, &ptr2, 10);
+    if(ptr_start == ptr2)
+      return INVALID_FORMAT; // no conversion
+    if(errno != 0 || proposed_exponent > INT_MAX)
+      return INVALID_DATA;
+    #ifdef EBUG
+    printf("'Expo' conversion is %ld\n", proposed_exponent);
+    #endif
+    if( proposed_exponent > assignment->exponent ) // don't clobber larger values, this is our TF/P-1 filter
+      assignment->exponent = (int)proposed_exponent;
+    
+    outer_cont: /* One nice feature Python has is putting "else"s on loops, only to be executed when NOT "break"-ed from.
+                 That's exactly what I'm duplicating here with the inner loop and default "expo" branching. */
+    ptr = 1 + ptr_end; // Reset for the next field (*ptr == '\n' || *ptr == comment-delimiter when we're done)
+  } // end outer for()
+  // now we've looped over all fields in worktodo line
+  ptr = ptr_end;
   #ifdef EBUG
-  printf("Copied AID, parsing expo...\n");
+  printf("Left for()\n");
   #endif
-  // ptr now points at exponent...
-  ptr_start = ptr;
-  while( (isspace(*ptr_start)) && ('\0' != *ptr_start ))
-    ptr_start++;
-  if ('M' == *ptr_start)	// M means Mersenne exponent...
-    ptr_start++;
-  errno = 0;
-  proposed_exponent = strtoul(ptr_start, &ptr_end, 10);
-  if (ptr_start == ptr_end)
-    return INVALID_FORMAT;	// no conversion
-  if ((0!=errno) || (proposed_exponent > UINT_MAX))
-    return INVALID_DATA;	// for example, too many digits.
-  ptr=ptr_end;
-  while (('\0'!=ptr[0]) && isspace(ptr[0]))	// ignore blanks...
-    ptr++;
-  if (NULL != strstr(ptr,"\n"))		// kill off any trailing newlines...
-    *strstr(ptr,"\n") = '\0';
-  if (*ptr != '\0')
-    strcopy(assignment->comment, ptr, 1+strchr(ptr,'\0')-ptr);
-  #ifdef EBUG
-  printf("Parsed exponent. Returning from parse_worktodo.\n");
-  #endif
+  if(*ptr == '\n' || *ptr == '\0') // no comment (lol)
+    assignment->comment[0] = '\0';
+  else if(comment_on_line) {
+    
+    // Don't include delimters in actual comment
+    if(*ptr == '/' || *ptr == '\\')
+      ptr += 2;
+    else if(*ptr == '#')
+      ptr++;
+    else { fprintf(stderr, "Wow, something's screwed up. Please file as detailed a bug report as possible.\n\n"); exit(7);
+         }
+      
+    while (('\0'!=ptr[0]) && isspace(ptr[0]))	// ignore blanks...
+      ptr++;
+    if (*ptr != '\0') {
+      if (NULL != strchr(ptr,'\n'))		// kill off any trailing newlines...
+        *strchr(ptr,'\n') = '\0';
+      strcopy(assignment->comment, ptr, 1+strchr(ptr,'\0')-ptr);
+    } else assignment->comment[0] = '\0';
+  
+  } else /* No comment on line, but no terminating null or newline? */ 
+    { fprintf(stderr, "Wow, something's way screwed up. Please file as detailed a bug report as possible.\n\n"); exit(77);
+    }
 
   if (linecopy != NULL)
     *endptr = *linecopy + (ptr_end - line);
-  //! I'm not sure what this is intended to do...
+  
+  if(assignment->exponent < 100 || (0 < assignment->fft_length && assignment->fft_length < 4096) ) // sanity check
+    return INVALID_DATA;
 
-  assignment->exponent = proposed_exponent;
-  return reason;
+  return NO_WARNING;
 }
 
 /************************************************************************************************************
  * Function name : get_next_assignment                                                                      *
  *   													    *
  *     INPUT  :	char *filename										    *
- *		int *exponent									    	    *
- *		char *assignment_key[100];								    *
+ *		int *exponent										    *
+ *		int* fft_length									    	    *
+ *		char *hex_key[132];								    	    *
  *     OUTPUT :                                        							    *
  *                                                                                                          *
  *     0 - OK												    *
  *     1 - get_next_assignment : cannot open file							    *
  *     2 - get_next_assignment : no valid assignment found						    *
  ************************************************************************************************************/
-enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, LINE_BUFFER *key, int verbosity)
+enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, int* fft_length, LINE_BUFFER *key)
 {
   #ifdef EBUG
   printf("Starting GNA.\n");
@@ -361,13 +460,11 @@ enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, LINE_B
   FILE *f_in;
   enum PARSE_WARNINGS value;
   struct ASSIGNMENT assignment;
+  assignment.fft_length = 0;
   char *tail;
   LINE_BUFFER line;
   unsigned int linecount=0;
 
-  #ifdef EBUG
-  printf("Opening %s...\n", filename);
-  #endif
   f_in = _fopen(filename, "r");
   if(NULL == f_in)
   {
@@ -375,38 +472,31 @@ enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, LINE_B
     fprintf(stderr, "Can't open workfile %s\n", filename);
     return CANT_OPEN_FILE;	// nothing to open...
   }
-  #ifdef EBUG
-  printf("Opened %s. About to call parse_worktodo.\n", filename);
-  #endif
   do
   {
     linecount++;
+    
     value = parse_worktodo_line(f_in,&assignment,&line,&tail);
-    #ifdef EBUG
-    printf("Got an assignment. Retval: %d. Expo: %d\n", value, assignment.exponent);
-    #endif
+    
     if ((BLANK_LINE == value) || (NONBLANK_LINE == value))
       continue;
     if (NO_WARNING == value)
     {
-      if (valid_assignment(assignment.exponent))
+      if (valid_assignment(assignment.exponent, assignment.fft_length))
         break;
       value = INVALID_DATA;
     }
 
     if (END_OF_FILE == value)
       break;
-    if(verbosity >= 1)
+    fprintf(stderr, "Warning: ignoring line %u: \"%s\" in \"%s\". Reason: ", linecount, line, filename);
+    switch(value)
     {
-      fprintf(stderr, "Warning: ignoring line %u: \"%s\" in \"%s\". Reason: ", linecount, line, filename);
-      switch(value)
-      {
-        case LONG_LINE:           printf("line is too long.\n"); break;
-        case NO_TEST_EQUAL:       printf("doesn't begin with Test= or DoubleCheck=.\n");break;
-        case INVALID_FORMAT:      printf("invalid format.\n");break;
-        case INVALID_DATA:        printf("invalid data.\n");break;
-        default:                  printf("unknown error.\n"); break;
-      }
+      case LONG_LINE:           printf("line is too long.\n"); break;
+      case NO_TEST_EQUAL:       printf("doesn't begin with Test= or DoubleCheck=.\n");break;
+      case INVALID_FORMAT:      printf("invalid format.\n");break;
+      case INVALID_DATA:        printf("invalid data.\n");break;
+      default:                  printf("unknown error.\n"); break;
     }
     
     // if (LONG_LINE != value)
@@ -418,8 +508,9 @@ enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, LINE_B
   if (NO_WARNING == value)
   {
     *exponent = assignment.exponent;
+    if(fft_length > 0) *fft_length = assignment.fft_length;
     
-    if (key!=NULL)strcopy(*key, assignment.assignment_key, MAX_LINE_LENGTH+1);
+    if (key!=NULL)strcopy(*key, assignment.hex_key, MAX_LINE_LENGTH+1);
     
     return OK;
   }
@@ -566,10 +657,10 @@ int IniGetStr(char *inifile, char *name, char *string, char* dflt)
   {
     if(!strncmp(buf,name,strlen(name)) && buf[strlen(name)]=='=')
     {
-      if(sscanf(&(buf[strlen(name)+1]),"%131s",string)==1)found=1; //! CuLu's char*'s are 132 bytes
+      if(sscanf(&(buf[strlen(name)+1]),"%131s",string)==1)found=1; // CuLu's char*'s are 132 bytes
     }
   }
   fclose(in);
   if(found)return 1;
-  error: spritf(string, "%s", dflt); return 0;
+  error: _sprintf(string, "%s", dflt); return 0;
 }
