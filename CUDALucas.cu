@@ -1284,6 +1284,7 @@ check (int q, char *expectedResidue)
 	      print_time_from_seconds (diff);
 	      printf (")\n");
 	      fflush (stdout);
+	      maxerr = 0; // Instead of tracking maxerr over whole run, reset it at each checkpoint.
 	      gettimeofday (&time0, NULL);
 	      if (expectedResidue) 
 	      {
