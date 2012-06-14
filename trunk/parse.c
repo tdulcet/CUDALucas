@@ -168,7 +168,7 @@ returns 1 if the assignment is within the supported bounds of CUDALucas,
 	if(!isprime(exp))     {ret = 0; fprintf(stderr, "Warning: exponent is not prime!\n");}
 	if(fftlen % (128*32)) {ret = 0; fprintf(stderr, "Warning: FFT length is invalid. See CUDALucas.ini for details about valid lengths.\n");}
 	// This doesn't guarantee that it *is* valid, but it will catch horribly bad lengths. 
-	// (To do more checking, we'd need access the "threads" variable from CUDALucas.cu.
+	// (To do more checking, we'd need access the "threads" variable from CUDALucas.cu.)
 	
   return ret;
 }
