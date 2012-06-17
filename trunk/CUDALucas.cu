@@ -956,7 +956,7 @@ rm_checkpoint (int q)
 double *
 read_checkpoint (int q, int *n, int *j, long* total_time)
 {
-/* If we get file reading errors, then this doesn't try the backup tfn. Should we add that? */
+/* If we get file reading errors, then this doesn't try the backup t-file. Should we add that? */
   FILE *fPtr;
   int q_r, n_r, j_r;
   long time_r;
@@ -1157,7 +1157,7 @@ check (int q, char *expectedResidue)
 {
   int n = q/20, j = 1L, last = 2L, error_flag;
   size_t k;
-  double terr, *x = NULL, maxerr;
+  double terr, *x = NULL, maxerr = 0;
   int restarting = 0;
   timeval time0, time1;
   long total_time = 0, start_time;
@@ -1581,13 +1581,13 @@ while (argc > 1)
       else if (strcmp (argv[1], "-h") == 0)
         {
       	  fprintf (stderr,
-	       "$ CUDALucas -h|-v\n");
+	       "$ CUDALucas -h|-v\n\n");
       	  fprintf (stderr,
-	       "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads 32|64|128|256|512|1024] [-c checkpoint_iteration] [-f fft_length] [-s folder] [-t] [-polite iteration] [-k] exponent|input_filename\n");
+	       "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads 32|64|128|256|512|1024] [-c checkpoint_iteration] [-f fft_length] [-s folder] [-t] [-polite iteration] [-k] exponent|input_filename\n\n");
       	  fprintf (stderr,
-	       "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads 32|64|128|256|512|1024] [-t] [-polite iteration] -r\n");
+	       "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads 32|64|128|256|512|1024] [-t] [-polite iteration] -r\n\n");
       	  fprintf (stderr,
-	       "$ CUDALucas [-d device_number] [-info] -cufftbench start end distance\n");
+	       "$ CUDALucas [-d device_number] [-info] -cufftbench start end distance\n\n");
 	  fprintf (stderr,
 	       "                       -h print this help message\n");
 	  fprintf (stderr,
@@ -1619,7 +1619,7 @@ while (argc > 1)
         }
       else if (strcmp (argv[1], "-polite") == 0)
 	{
-	  if (argc < 3)
+	  if (argc < 3 || argv[2][0] == '-')
 	    {
 	      fprintf (stderr, "can't parse -polite option\n\n");
 	      exit (2);
@@ -1647,7 +1647,7 @@ while (argc > 1)
 	}
       else if (strcmp (argv[1], "-d") == 0)
 	{
-	  if (argc < 3)
+	  if (argc < 3 || argv[2][0] == '-')
 	    {
 	      fprintf (stderr, "can't parse -d option\n\n");
 	      exit (2);
@@ -1658,7 +1658,7 @@ while (argc > 1)
 	}
       else if (strcmp (argv[1], "-i") == 0)
 	{
-	  if(argc < 3)
+	  if(argc < 3 || argv[2][0] == '-')
 	    {
 	      fprintf (stderr, "can't parse -i option\n\n");
 	      exit (2);
@@ -1675,7 +1675,7 @@ while (argc > 1)
         }
       else if (strcmp (argv[1], "-cufftbench") == 0)
 	{
-	  if (argc < 5)
+	  if (argc < 5 || argv[2][0] == '-' || argv[3][0] == '-' || argv[4][0] == '-')
 	    {
 	      fprintf (stderr, "can't parse -cufftbench option\n\n");
 	      exit (2);
@@ -1688,7 +1688,7 @@ while (argc > 1)
 	}
       else if (strcmp (argv[1], "-threads") == 0)
 	{
-	  if (argc < 3)
+	  if (argc < 3 || argv[2][0] == '-')
 	    {
 	      fprintf (stderr, "can't parse -threads option\n\n");
 	      exit (2);
@@ -1706,7 +1706,7 @@ while (argc > 1)
 	}
       else if (strcmp (argv[1], "-c") == 0)
 	{
-	  if (argc < 3)
+	  if (argc < 3 || argv[2][0] == '-')
 	    {
 	      fprintf (stderr, "can't parse -c option\n\n");
 	      exit (2);
@@ -1722,19 +1722,40 @@ while (argc > 1)
 	}
       else if (strcmp (argv[1], "-f") == 0)
 	{
-	  if (argc < 3)
+	  if (argc < 3 || argv[2][0] == '-')
 	    {
 	      fprintf (stderr, "can't parse -f option\n\n");
 	      exit (2);
 	    }
-	  fftlen = atoi (argv[2]);
+	  char* endptr, * ptr = argv[2];
+	  int mult = 0;
+	  while( *ptr ) {
+	    if( *ptr == 'k' || *ptr == 'K' ) {
+	      mult = 1024;
+	      break;
+	    }
+	    if( *ptr == 'm' || *ptr == 'M' ) {
+	      mult = 1024*1024;
+	      break;
+	    }
+	    ptr++;
+	  }
+	  if( !mult ) { // No K or M, treat as before
+	    mult = 1;
+	    ptr = endptr = NULL;
+	  }
+	  fftlen = (int) strtoul(argv[2], &endptr, 10)*mult;
+	  if( endptr != ptr ) { // The K or M must directly follow the num (or NULL == NULL)
+	    fprintf (stderr, "can't parse -f option\n\n");
+	    exit (2);
+	  }
 	  argv += 2;
 	  argc -= 2;
 	}
       else if (strcmp (argv[1], "-s") == 0)
 	{
 	  s_f = 1;
-	  if (argc < 3)
+	  if (argc < 3 || argv[2][0] == '-')
 	    {
 	      fprintf (stderr, "can't parse -s option\n\n");
 	      exit (2);
