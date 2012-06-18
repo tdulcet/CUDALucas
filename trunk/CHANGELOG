@@ -25,3 +25,10 @@ New in 2.04:
      
      The "err = " prints the maximum error since the last checkpoint, as opposed
      to the maximum error since the last restart.
+     
+     Now prints AID into results file, in a format that PrimeNet will
+     understand. (Thanks James!)
+     
+     The first 1000 iterations now use -t regardless, and also calculate average
+     error. If average error >= 0.25, then the test will be restarted with a 
+     longer FFT length.

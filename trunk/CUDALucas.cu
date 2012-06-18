@@ -59,6 +59,7 @@ int threads, polite, polite_f, bad_selftest=0;
 char folder[132];
 char input_filename[132], RESULTSFILE[132];
 char INIFILE[132] = "CUDALucas.ini";
+char AID[132]; // Assignment key
 char s_residue[32];
 
 /* http://www.kurims.kyoto-u.ac.jp/~ooura/fft.html
@@ -716,7 +717,7 @@ choose_fft_length (int input_length)
 	   #ifdef TEST
 	   printf("%d is greater than input %d, returning %d, which is %dK + %d\n", tmp, input_length, tmp, tmp/1024, tmp%1024);
 	   #endif
-	     return (int) tmp;
+	     return (tmp - (tmp % 1024));
 	   }
 	 }
     }
@@ -842,30 +843,19 @@ printbits (double *x,
 	   int q,
 	   int N,
 	   int b, int c, double high, double low, int totalbits,
-	   int flag, char *expectedResidue)
+	   FILE* fp, char *expectedResidue)
 {
   char *bits = (char *) malloc ((int) totalbits);
   char residue[32];
   char temp[32];
   int j, k, i, word;
-  FILE *fp=NULL;
-  if (flag)
-    {
-      fp = fopen (RESULTSFILE, "a");
-      if (fp == NULL)
-	{
-	  fprintf (stderr, "Cannot write results to %s\n\n", RESULTSFILE);
-	  exit (1);
-	}
-    }
+  
   if (is_zero (x, N, 0, 0))
     {
       printf ("M( %d )P, n = %dK, %s", q, N/1024, program);
-      if (flag)
+      if (fp)
 	{
 	  fprintf (fp, "M( %d )P, n = %dK, %s", q, N/1024, program);
-	  fprintf (fp, "\n");
-	  fclose (fp);
 	}
     }
   else
@@ -876,7 +866,7 @@ printbits (double *x,
 	x_tmp[i] = x[i];
       balancedtostdrep (x_tmp, N, b, c, high, low, 0, 0);
       printf ("M( %d )C, 0x", q);
-      if (flag)
+      if (fp)
 	fprintf (fp, "M( %d )C, 0x", q);
       j = 0;
       i = 0;
@@ -920,12 +910,10 @@ printbits (double *x,
       free (x_tmp);
       printf ("%s", residue);
       printf (", n = %dK, %s", N/1024, program);
-      if (flag)
+      if (fp)
 	{
 	  fprintf (fp, "%s", residue);
 	  fprintf (fp, ", n = %dK, %s", N/1024, program);
-	  fprintf (fp, "\n");
-	  fclose (fp);
 	}
       if (expectedResidue && strcmp (residue, expectedResidue))
       {
@@ -1157,8 +1145,8 @@ check (int q, char *expectedResidue)
 {
   int n = q/20, j = 1L, last = 2L, error_flag;
   size_t k;
-  double terr, *x = NULL, maxerr = 0;
-  int restarting = 0;
+  double terr, *x = NULL, maxerr, max_err = 0.0, totalerr = 0.0, avgerr;
+  int restarting = 0, continuing = 0;
   timeval time0, time1;
   long total_time = 0, start_time;
   if (!expectedResidue)
@@ -1169,14 +1157,15 @@ check (int q, char *expectedResidue)
     }
   do
     {				/* while (restarting) */
-      maxerr = 0.0;
+      maxerr = 0.0; max_err = 0.0; totalerr = 0.0; j = 1L;
       if (fftlen)
-	   n = fftlen;
-	 else
+	n = fftlen;
+      else {
         #ifdef TEST
         printf("Exp = %d, Exp/20 = %d\n", q, q/20);
         #endif
 	   n = choose_fft_length( n );
+      }
       if ((n / threads) > 65535)
 	{
 	  fprintf (stderr, "over specifications Grid = %d\n", (int) n / threads);
@@ -1184,10 +1173,12 @@ check (int q, char *expectedResidue)
 	  exit (2);
 	}
       if (!expectedResidue && !restarting
-	  && (x = read_checkpoint (q, &n, &j, &total_time)) != NULL)
-	printf
+	  && (x = read_checkpoint (q, &n, &j, &total_time)) != NULL) {
+	 printf
 	  ("Continuing work from a partial result of M%d fft length = %dK iteration = %d\n",
 	   q, n/1024, j);
+	 continuing = 1;
+	}
       else
 	{
 	  printf ("Starting M%d fft length = %dK\n", q, n/1024);
@@ -1196,8 +1187,8 @@ check (int q, char *expectedResidue)
 	    x[k] = 0.0;
 	  x[0] = 4.0;
 	  j = 1;
-	  if (t_f)
-	    j_save = 0;
+	  j_save = 0; // Only if(t_f) in old code
+	  
 	}
       fflush (stdout);
       restarting = 0;
@@ -1205,10 +1196,63 @@ check (int q, char *expectedResidue)
       gettimeofday (&time0, NULL);
       start_time = time0.tv_sec;
       last = q - 2;		/* the last iteration done in the primary loop */
+      
+      if( !continuing ) {
+        int temp = t_f; t_f = 1; // Override for extra safety
+        printf("Running careful round off test for 1000 iterations. If average error >= 0.25, the test will restart with a larger FFT length.\n"); 
+        printf("n is %d\n", n);
+        
+        for (; !restarting && j < 1000; j++) // Initial LL loop; no -k, no checkpoints, quitting doesn't do anything
+	  {
+	    terr = lucas_square (x, n, j, last, (float) maxerr, 1);
 
-      for (; !restarting && j <= last; j++)
+	    totalerr += terr;
+	    
+	    if( terr > max_err )
+	      max_err = terr;
+	    if( terr > maxerr ) 
+	      maxerr = terr;
+	
+	    if(terr >= 0.35)
+	      {
+	        /* n is not big enough; increase it and start over */
+		 printf
+		  ("Iteration = %d < 1000 && err = %5.5f >= 0.35, increasing n from %dK\n",
+		  j, (double) terr, (int) n/1024);
+		 n++;
+		 restarting = 1;
+		 fftlen = 0; // Whatever the user entered isn't good enough, so override
+	     }
+	    else if( j % 100 == 0 ) {
+	      printf(
+	        "Iteration %d, average error = %5.5f, max error = %5.5f\n",
+	        j, totalerr/(double)j, max_err);
+	      max_err = 0.0;
+	    }
+	      
+	  }
+	if( !restarting ) {
+          avgerr = totalerr/(j-1); // j should be 1000
+          if( avgerr >= 0.25 ) {
+            printf("Iteration 1000, average error = %5.5f >= 0.25 (max error = %5.5f), increasing FFT length and restarting.\n", avgerr, max_err);
+            fftlen = 0; // Whatever the user entered isn't good enough, so override
+            n++;
+            restarting = 1;
+          } else if( avgerr < 0 ) {
+            fprintf(stderr, "Something's gone terribly wrong! Avgerr = %5.5f < 0 !\n", avgerr);
+          } else {
+            printf("Iteration 1000, average error = %5.5f < 0.25 (max error = %5.5f), continuing test.\n", avgerr, max_err);
+            continuing = 1; // I don't think this is necessary, but just in case.
+            max_err = 0.0;
+          }
+        }
+        t_f = temp; // Reset override
+      }
+      
+      
+      for (; !restarting && j <= last; j++) // Main LL loop, j should be >= 1000 unless user killed a test with j<1000
 	{
-	  if ((j % 100) == 1 || j < 1000)
+	  if ((j % 100) == 1)
 	    error_flag = 1;
 	  else
 	    error_flag = 0;
@@ -1217,32 +1261,19 @@ check (int q, char *expectedResidue)
 
 	  if (error_flag)
 	    {
-	      if (terr > maxerr)
-		maxerr = terr;
-	      if (j < 1000)
-		{
-		  if (terr >= 0.25)
-		    {
-		      if (!fftlen)
-			{	/* n is not big enough; increase it and start over */
-			  printf
-			    ("iteration = %d < 1000 && err = %g >= 0.25, increasing n from %dK\n",
-			     j, (double) terr, (int) n/1024);
-			  n++;
-			  restarting = 1;
-			}
-		    }
-		}
-	      else		// error_flag && j >= 1000
-		{
-		  if (terr >= 0.35)
+	      if( terr > max_err )
+	        max_err = terr;
+	      if( terr > maxerr ) 
+	        maxerr = terr;
+		
+	      if (terr >= 0.35)
 		    {
 		      if (t_f)
 			{
 			  gettimeofday(&time1, NULL);
 			  printf
-			    ("iteration = %d >= 1000 && err = %g >= 0.35, fft length = %d, writing checkpoint file (because -t is enabled) and exiting.\n\n",
-			     j, (double) terr, (int) n);
+			    ("Iteration = %d >= 1000 && err = %5.5g >= 0.35, fft length = %dK, writing checkpoint file (because -t is enabled) and exiting.\n\n",
+			     j, (double) terr, (int) n/1024);
 			  cutilSafeCall (cudaMemcpy
 					 (x, g_save, sizeof (double) * n,
 					  cudaMemcpyDeviceToHost));
@@ -1254,12 +1285,12 @@ check (int q, char *expectedResidue)
 		      else
 			{
 			  printf
-			    ("iteration = %d >= 1000 && err = %g >= 0.35, fft length = %d, not writing checkpoint file (because -t is disabled) and exiting.\n\n",
-			     j, (double) terr, (int) n);
+			    ("Iteration = %d >= 1000 && err = %5.5g >= 0.35, fft length = %dK, not writing checkpoint file (because -t is disabled) and exiting.\n\n",
+			     j, (double) terr, (int) n/1024);
 			  exit (2);
 			}
 		    }
-		  else		// error_flag && j >= 1000 && terr < 0.35
+		  else		// error_flag && terr < 0.35
 		    {
 		      if (t_f)
 			{
@@ -1267,7 +1298,6 @@ check (int q, char *expectedResidue)
 			  j_save = j;
 			}
 		    }
-		}
 	    }
 	  if ((j % checkpoint_iter) == 0)
 	    {
@@ -1276,7 +1306,7 @@ check (int q, char *expectedResidue)
 	      int ret = printbits (x, q, n, b, c, high, low, 64, 0, expectedResidue);
 	      long diff = time1.tv_sec - time0.tv_sec;
 	      long diff1 = 1000000 * diff + time1.tv_usec - time0.tv_usec;
-	      printf (" err = %4.4f (", maxerr);
+	      printf (" err = %4.4f (", max_err);
 	      print_time_from_seconds (diff);
 	      printf (" real, %4.4f ms/iter, ETA ",
 		      diff1 / 1000.0 / checkpoint_iter);
@@ -1284,22 +1314,23 @@ check (int q, char *expectedResidue)
 	      print_time_from_seconds (diff);
 	      printf (")\n");
 	      fflush (stdout);
-	      maxerr = 0; // Instead of tracking maxerr over whole run, reset it at each checkpoint.
+	      max_err = 0.0; // Instead of tracking max_err over whole run, reset it at each checkpoint.
 	      gettimeofday (&time0, NULL);
 	      if (expectedResidue) 
 	      {
 		j = last + 1;
 		if (ret)
 		  printf
-		  ("\nExpected residue [%s] does not match actual residue [%s]\n",
+		  ("\nExpected residue [%s] does not match actual residue [%s]\n\n",
 	          expectedResidue, s_residue);
-	        else printf("This residue is correct.\n");
+	        else printf("This residue is correct.\n\n");
 	      }
 	    }
 
 	  if (((j % checkpoint_iter) == 0 || quitting == 1)
 	      && !expectedResidue)
 	    {
+	      gettimeofday (&time1, NULL);
 	      cutilSafeCall (cudaMemcpy
 			     (x, g_x, sizeof (double) * n,
 			      cudaMemcpyDeviceToHost));
@@ -1345,14 +1376,26 @@ check (int q, char *expectedResidue)
       if (!restarting && !expectedResidue && !quitting)
 	{
 	  gettimeofday (&time1, NULL);
+	  FILE* fp = fopen(RESULTSFILE, "a");
+	  if(!fp) {
+	    fprintf (stderr, "Cannot write results to %s\n\n", RESULTSFILE);
+	    exit (1);
+	  }
 	  if( total_time >= 0 ) { /* Only print time if we don't have an old checkpoint file */
 	    total_time += time1.tv_sec - start_time;
-	    printbits (x, q, n, b, c, high, low, 64, 1, 0);
+	    printbits (x, q, n, b, c, high, low, 64, fp, 0);
 	    printf (". Estimated total time: ");
 	    print_time_from_seconds( total_time );
 	  } else {
-	    printbits (x, q, n, b, c, high, low, 64, 1, 0);
+	    printbits (x, q, n, b, c, high, low, 64, fp, 0);
 	  }
+	  
+	  if( AID[0] && strncasecmp(AID, "N/A", 3) ) { // If (AID is not null), AND (AID is NOT "N/A") (case insensitive)
+	    fprintf(fp, ", AID: %s\n", AID);
+	  } else {
+	    fprintf(fp, "\n");
+	  }
+	  fclose(fp);
 	  printf("\n\n");
 	  fflush (stdout);
 	  rm_checkpoint (q);
@@ -1522,7 +1565,7 @@ int main (int argc, char *argv[])
       if (q <= 0)
       {
         int error;
-	char AID[132]; //! Assignment key; not useful as of yet
+	
 	#ifdef EBUG
 	printf("Processed INI file and console arguments correctly; about to call get_next_assignment().\n");
 	#endif
@@ -1740,7 +1783,7 @@ while (argc > 1)
 	    }
 	    ptr++;
 	  }
-	  if( !mult ) { // No K or M, treat as before
+	  if( !mult ) { // No K or M, treat as before (PS The Python else clause for loops I mention in parse.c would be useful here :) )
 	    mult = 1;
 	    ptr = endptr = NULL;
 	  }
