@@ -62,15 +62,15 @@ inline void __cufftSafeCall( cufftResult err, const char *file, const int line )
 		fprintf(stderr, "%s(%i) : cufftSafeCall() CUFFT error %d: ",
 				file, line, (int)err);
 		switch (err) {
-			case CUFFT_INVALID_PLAN:   fprintf(stderr, "CUFFT_INVALID_PLAN\n");
-			case CUFFT_ALLOC_FAILED:   fprintf(stderr, "CUFFT_ALLOC_FAILED\n");
-			case CUFFT_INVALID_TYPE:   fprintf(stderr, "CUFFT_INVALID_TYPE\n");
-			case CUFFT_INVALID_VALUE:  fprintf(stderr, "CUFFT_INVALID_VALUE\n");
-			case CUFFT_INTERNAL_ERROR: fprintf(stderr, "CUFFT_INTERNAL_ERROR\n");
-			case CUFFT_EXEC_FAILED:    fprintf(stderr, "CUFFT_EXEC_FAILED\n");
-			case CUFFT_SETUP_FAILED:   fprintf(stderr, "CUFFT_SETUP_FAILED\n");
-			case CUFFT_INVALID_SIZE:   fprintf(stderr, "CUFFT_INVALID_SIZE\n");
-			case CUFFT_UNALIGNED_DATA: fprintf(stderr, "CUFFT_UNALIGNED_DATA\n");
+			case CUFFT_INVALID_PLAN:   fprintf(stderr, "CUFFT_INVALID_PLAN\n"); break;
+			case CUFFT_ALLOC_FAILED:   fprintf(stderr, "CUFFT_ALLOC_FAILED\n"); break;
+			case CUFFT_INVALID_TYPE:   fprintf(stderr, "CUFFT_INVALID_TYPE\n"); break;
+			case CUFFT_INVALID_VALUE:  fprintf(stderr, "CUFFT_INVALID_VALUE\n"); break;
+			case CUFFT_INTERNAL_ERROR: fprintf(stderr, "CUFFT_INTERNAL_ERROR\n"); break;
+			case CUFFT_EXEC_FAILED:    fprintf(stderr, "CUFFT_EXEC_FAILED\n"); break;
+			case CUFFT_SETUP_FAILED:   fprintf(stderr, "CUFFT_SETUP_FAILED\n"); break;
+			case CUFFT_INVALID_SIZE:   fprintf(stderr, "CUFFT_INVALID_SIZE\n"); break;
+			case CUFFT_UNALIGNED_DATA: fprintf(stderr, "CUFFT_UNALIGNED_DATA\n"); break;
 			default: fprintf(stderr, "CUFFT Unknown error code\n");
 		}
 		exit(-1);

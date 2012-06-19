@@ -1,8 +1,6 @@
-2. Add parse_worktodo_line() functionality based on what characters each CSV contains
-3. Add a TEST cufftbench script to get FFT length data (like set thread count etc.) (Done)
-3a. Determine if the Cpu is screwing with results
 4. Separate check() from a hypothetical test(int q, char* expectres, int iters) function used for self testing and roundoff testing
-5. Add "total time spent" message
+4a. Refine print_bits() to print only the residue (related to 9a)
 6. Add V5UserID and ComputerID ini file options for later use
 7. Finish up results file locking
-8. Figure out compiling
+8. Figure out compiling arches/versions
+9. Add option to not print residues at checkpoints? Option to skip extra initial error checking?
