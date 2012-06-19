@@ -166,7 +166,7 @@ returns 1 if the assignment is within the supported bounds of CUDALucas,
 	// Perhaps add a largest exponent?  
 	if(exp < 86243)       {ret = 0; fprintf(stderr, "Warning: exponents < 86243 are not supported!\n");}
 	if(!isprime(exp))     {ret = 0; fprintf(stderr, "Warning: exponent is not prime!\n");}
-	if(fftlen % (128*32)) {ret = 0; fprintf(stderr, "Warning: FFT length is invalid. See CUDALucas.ini for details about valid lengths.\n");}
+	if(fftlen % (1024))   {ret = 0; fprintf(stderr, "Warning: FFT length %d is invalid, it must be a multiple of 1024. See CUDALucas.ini for more details about good lengths.\n", fftlen);}
 	// This doesn't guarantee that it *is* valid, but it will catch horribly bad lengths. 
 	// (To do more checking, we'd need access the "threads" variable from CUDALucas.cu.)
 	
@@ -308,7 +308,7 @@ output
     }
   }
   #ifdef EBUG
-  printf("Scanned %d commas\n", number_of_commas);
+  printf("  Scanned %d commas\n", number_of_commas);
   #endif
   if (number_of_commas > 4)	// must have less than 5 commas... (possible fields are key,exp,fft,tf,p-1)
     return INVALID_FORMAT;
@@ -327,26 +327,29 @@ output
         ptr_end = strchr(ptr, '\0');
     }
     #ifdef EBUG
-    printf("In main for() loop, %d commas left\n", number_of_commas);
+    printf("  In main for() loop, %d commas left\n", number_of_commas);
     #endif
     for(ptr_start = ptr; ptr_start < ptr_end; ptr_start++) { 
       
       #ifdef EBUG
-      printf("Looping on chars, ptr_start = %c\n", *ptr_start);
+      printf("  Looping on chars, ptr_start = %c\n", *ptr_start);
       #endif
       if( ('A' <= *ptr_start && *ptr_start <= 'F') || ('a' <= *ptr_start && *ptr_start <= 'f') ) {
       // we have some sort of hex assignment key, or "N/A". Either way, it's an AID of some sort.
         #ifdef EBUG
-        printf("Branched on AID, trigger is %c\n", *ptr_start);
+        printf("  Branched on AID, trigger is %c\n", *ptr_start);
         #endif
-        strcopy(assignment->hex_key, ptr, 1+(ptr_end - ptr));	// copy the comma..
-        *strchr(assignment->hex_key, ',') = '\0';	// null-terminate key
+        strcopy(assignment->hex_key, ptr, (ptr_end - ptr));
+        assignment->hex_key[ptr_end-ptr] = '\0';	// null-terminate key
+        #ifdef EBUG
+        printf("Key is '%s'\n", assignment->hex_key);
+        #endif
         goto outer_continue;
       }
       else if( *ptr_start == 'k' || *ptr_start == 'K' ) {
       // we've found a fft length field.
         #ifdef EBUG
-        printf("Branched on FFT-K\n");
+        printf("  Branched on FFT-K\n");
         #endif
         errno = 0;
         proposed_fftlen = strtoul(ptr, &ptr2, 10) * 1024; // Don't forget the K ;)
@@ -360,7 +363,7 @@ output
       else if( *ptr_start == 'm' || *ptr_start == 'M' ) {
       // we've found a fft length field.
         #ifdef EBUG
-        printf("Branched on FFT-M\n");
+        printf("  Branched on FFT-M\n");
         #endif
         errno = 0;
         proposed_fftlen = strtoul(ptr, &ptr2, 10) * 1024*1024; // Don't forget the M ;)
@@ -379,7 +382,7 @@ output
     // we must assume it's the exponent, except to assume that the largest number 
     // read in is the exponent (to filter out TF lim or P-1 bool)
     #ifdef EBUG
-    printf("Branched on default\n");
+    printf("  Branched on default\n");
     #endif
     ptr_start = ptr; /* Nothing special, so reset ptr_start to the start */
     if ('M' == *ptr_start)	// M means Mersenne exponent...
@@ -391,7 +394,7 @@ output
     if(errno != 0 || proposed_exponent > INT_MAX)
       return INVALID_DATA;
     #ifdef EBUG
-    printf("'Expo' conversion is %ld\n", proposed_exponent);
+    printf("  'Expo' conversion is %ld\n", proposed_exponent);
     #endif
     if( proposed_exponent > assignment->exponent ) // don't clobber larger values, this is our TF/P-1 filter
       assignment->exponent = (int)proposed_exponent;
@@ -403,7 +406,7 @@ output
   // now we've looped over all fields in worktodo line
   ptr = ptr_end;
   #ifdef EBUG
-  printf("Left for()\n");
+  printf("  Left for()\n");
   #endif
   if(*ptr == '\n' || *ptr == '\0') // no comment (lol)
     assignment->comment[0] = '\0';
@@ -454,7 +457,7 @@ output
 enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, int* fft_length, LINE_BUFFER *key)
 {
   #ifdef EBUG
-  printf("Starting GNA.\n");
+  printf("Starting GNA. Called with *fft = %d.\n", *fft_length);
   #endif
   FILE *f_in;
   enum PARSE_WARNINGS value;
@@ -468,7 +471,7 @@ enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, int* f
   if(NULL == f_in)
   {
 //    printf("Can't open workfile %s in %s\n", filename, getcwd(line,sizeof(LINE_BUFFER)) );
-    fprintf(stderr, "Can't open workfile %s\n", filename);
+    fprintf(stderr, "Can't open workfile %s\n\n", filename);
     return CANT_OPEN_FILE;	// nothing to open...
   }
   do
@@ -508,6 +511,9 @@ enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, int* f
   {
     *exponent = assignment.exponent;
     if(assignment.fft_length > 0) *fft_length = assignment.fft_length;
+    #ifdef EBUG
+    printf("Struct fft is %d, *fft_length is %d\n", assignment.fft_length, *fft_length);
+    #endif
     
     if (key!=NULL)strcopy(*key, assignment.hex_key, MAX_LINE_LENGTH+1);
     
@@ -544,13 +550,16 @@ enum ASSIGNMENT_ERRORS clear_assignment(char *filename, int exponent)
   struct ASSIGNMENT assignment;	// the found assignment....
   
   f_in = _fopen(filename, "r");
-  if (NULL == f_in)
+  if (NULL == f_in) {
+    fprintf(stderr, "Can't open workfile %s\n\n", filename);
     return CANT_OPEN_WORKFILE;
+  }
   
   f_out = _fopen("__worktodo__.tmp", "w");
   if (NULL == f_out)
   {
     fclose(f_in);
+    fprintf(stderr, "Can't open tmp workfile\n\n");
     return CANT_OPEN_TEMPFILE;
   }
 
@@ -558,12 +567,18 @@ enum ASSIGNMENT_ERRORS clear_assignment(char *filename, int exponent)
   while (END_OF_FILE != (value = parse_worktodo_line(f_in,&assignment,&line,&tail)) )
   {
     current_line++;
+    #ifdef EBUG
+    printf("Current_line = %d\n", current_line);
+    #endif
     if (NO_WARNING == value)
     {
       if( (exponent == assignment.exponent) )	// make final decision
       {
         if (line_to_drop > current_line)
         line_to_drop = current_line;
+        #ifdef EBUG
+        printf("Made final decision. linetodrop = %d, current = %d\n", line_to_drop, current_line);
+        #endif
         break;
       }
       else
@@ -574,7 +589,9 @@ enum ASSIGNMENT_ERRORS clear_assignment(char *filename, int exponent)
     else if ((BLANK_LINE == value) && (UINT_MAX == line_to_drop))
       line_to_drop = current_line+1;
   }
-
+  #ifdef EBUG
+  printf("Broken the first while loop, linetodrop = %d\n", line_to_drop);
+  #endif
   
   errno = 0;
   if (fseek(f_in,0L,SEEK_SET))
@@ -584,6 +601,7 @@ enum ASSIGNMENT_ERRORS clear_assignment(char *filename, int exponent)
     if (NULL == f_in)
     {
       fclose(f_out);
+      fprintf(stderr, "Can't open workfile %s\n\n", filename);
       return CANT_OPEN_WORKFILE;
     }
   }
@@ -613,12 +631,18 @@ enum ASSIGNMENT_ERRORS clear_assignment(char *filename, int exponent)
   }	// while.....
   fclose(f_in);
   fclose(f_out);
-  if (!found)
+  if (!found) {
+    fprintf(stderr, "Assignment M%d completed but not found in workfile\n\n", exponent);
     return ASSIGNMENT_NOT_FOUND;
-  if(remove(filename) != 0)
+  }
+  if(remove(filename) != 0) {
+    fprintf(stderr, "Cannot remove old workfile\n\n");
     return CANT_RENAME;
-  if(rename("__worktodo__.tmp", filename) != 0)
+  }
+  if(rename("__worktodo__.tmp", filename) != 0) {
+    fprintf(stderr, "Cannot move tmp workfile to regular workfile\n\n");
     return CANT_RENAME;
+  }
   return OK;
 }
 

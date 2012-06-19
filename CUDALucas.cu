@@ -1,4 +1,4 @@
-char program[] = "CUDALucas v2.04 Alpha";
+char program[] = "CUDALucas v2.04 Beta";
 /* CUDALucas.c
    Shoichiro Yamada Oct. 2010 
 
@@ -693,36 +693,85 @@ lucas_square (double *x, int N, int iter, int last, float maxerr,
   return (terr);
 }
 
+/**************************************************************************
+ *                                                                        *
+ *               End LL Functions, Begin Utility Functions                *
+ *                                                                        *
+ **************************************************************************/
+
 int
-choose_fft_length (int input_length)
-{ 
+choose_fft_length (int q, int* index)
+{  
+/* In order to increase length if an exponent has a round off issue, we use an
+extra paramter that we can adjust on the fly. In check(), index starts as -1,
+the default. In that case, choose from the table. If index >= 0, we must assume
+it's an override and return the corresponding length. */
   #ifdef TEST
-  printf("FFT selector called on %d\n", input_length);
+  printf("Exp = %d, Exp/20 = %d\n", q, q/20);
   #endif
-  int np[13] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15 };
-  int output_length = 1;
-  int i, tmp;
-  do
-    {
-      #ifdef TEST
-      printf("Output_length is now %d\n", output_length);
-      #endif
-      for (i = 0; i < 13; i++)
+
+  #define COUNT 89
+  int multipliers[COUNT] = {  6,     8,    12,    16,    18,    24, 
+                             32,    40,    48,    64,    72,    80, 
+                             96,   120,   128,   144,   160,   192, 
+                            240,   256,   288,   320,   384,   480, 
+                            512,   576,   640,   768,   864,   960, 
+                           1024,  1152,  1280,  1440,  1536,  1600, 
+                           1728,  1920,  2048,  2304,  2400,  2560,
+                           2880,  3072,  3200,  3456,  3840,  4000, 
+                           4096,  4608,  4800,  5120,  5760,  6144, 
+                           6400,  6912,  7680,  8000,  8192,  9216,
+                           9600, 10240, 11520, 12288, 12800, 13824, 
+                          15360, 16000, 16384, 18432, 19200, 20480, 
+                          23040, 24576, 25600, 27648, 30720, 32000, 
+                          32768, 34992, 36864, 38400, 40960, 46080,
+                          49152, 51200, 55296, 61440, 65536         };
+  // Largely copied from Prime95's jump tables
+  // Support up to 64M, the maximum length with threads == 1024
+  
+  if( 0 <= *index && *index < COUNT ) // override
+    return 1024*multipliers[*index];  
+  else // not override, choose length and set pointer to proper index
+  {  
+    int len, estimate = q/20, i = 0;
+    do {
+      len = 1024*multipliers[i];
+      if( len >= estimate ) 
       {
-        tmp = output_length * np[i];
-        #ifdef TEST
-        printf("Output_length * np[%d] is %d\n", i, tmp);
-        #endif
-	   if ( tmp >= input_length) {
-	   #ifdef TEST
-	   printf("%d is greater than input %d, returning %d, which is %dK + %d\n", tmp, input_length, tmp, tmp/1024, tmp%1024);
-	   #endif
-	     return (tmp - (tmp % 1024));
-	   }
-	 }
+        *index = i;
+        return len;
+      }
+    } while( ++i < COUNT);
+    return 0;
+  }
+}
+
+int fft_from_str(const char* str)
+/* This is really just strtoul with some extra magic to deal with K or M */
+{
+  char* endptr;
+  const char* ptr = str;
+  int len, mult = 0;
+  while( *ptr ) {
+    if( *ptr == 'k' || *ptr == 'K' ) {
+      mult = 1024;
+      break;
     }
-  while (output_length *= 2);
-  return 0;
+    if( *ptr == 'm' || *ptr == 'M' ) {
+      mult = 1024*1024;
+      break;
+    }
+    ptr++;
+  }
+  if( !mult ) { // No K or M, treat as before    (PS The Python else clause on loops I mention in parse.c would be useful here :) )
+    mult = 1;
+  }
+  len = (int) strtoul(str, &endptr, 10)*mult;
+  if( endptr != ptr ) { // The K or M must directly follow the num (or the num must extend to the end of the str)
+    fprintf (stderr, "can't parse fft length \"%s\"\n\n", str);
+    exit (2);
+  }
+  return len;
 }
 
 //From apsen
@@ -765,11 +814,9 @@ init_device (int device_number)
       printf ("warpSize            %d\n", (int) dev.warpSize);
       printf ("memPitch            %d\n", (int) dev.memPitch);
       printf ("maxThreadsPerBlock  %d\n", (int) dev.maxThreadsPerBlock);
-      printf
-	("maxThreadsDim[3]    %d,%d,%d\n",
+      printf ("maxThreadsDim[3]    %d,%d,%d\n",
 	 dev.maxThreadsDim[0], dev.maxThreadsDim[1], dev.maxThreadsDim[2]);
-      printf
-	("maxGridSize[3]      %d,%d,%d\n", dev.maxGridSize[0],
+      printf ("maxGridSize[3]      %d,%d,%d\n", dev.maxGridSize[0],
 	 dev.maxGridSize[1], dev.maxGridSize[2]);
       printf ("totalConstMem       %d\n", (int) dev.totalConstMem);
       printf ("Compatibility       %d.%d\n", dev.major, dev.minor);
@@ -1080,11 +1127,7 @@ cufftbench (int cufftbench_s, int cufftbench_e, int cufftbench_d)
       cutilSafeCall (cudaEventRecord (stop, 0));
       cutilSafeCall (cudaEventSynchronize (stop));
       cutilSafeCall (cudaEventElapsedTime (&outerTime, start, stop));
-      #ifdef TEST
-      printf ("CUFFT_Z2Z threads= %d size= %d time= %f msec\n", threads, j, outerTime / 100);
-      #else
       printf ("CUFFT_Z2Z size= %d time= %f msec\n", j, outerTime / 100);
-      #endif
       cufftSafeCall (cufftDestroy (plan));
     }
   cutilSafeCall (cudaFree ((char *) g_x));
@@ -1097,7 +1140,7 @@ void
 SetQuitting (int sig)
 {
   quitting = 1;
- sig==SIGTERM ? fprintf(stderr, "\nSIGTERM") : (sig==SIGINT ? fprintf(stderr, "\nSIGINT") : fprintf(stderr, "\nUnknown signal")) ;
+ sig==SIGTERM ? fprintf(stderr, "\tSIGTERM") : (sig==SIGINT ? fprintf(stderr, "\tSIGINT") : fprintf(stderr, "\tUnknown signal")) ;
  fprintf(stderr, " caught. Writing checkpoint.\n\n");
 }
 
@@ -1143,9 +1186,11 @@ _kbhit (void)
 int
 check (int q, char *expectedResidue)
 {
-  int n = q/20, j = 1L, last = 2L, error_flag;
+  int n, j = 1L, last = 2L, error_flag;
+  int t_ff = t_f; t_f = 1; /* Override for round off test, deactivate later */
+  int fft_index = -1; // See the comments of choose_length() for an explanation
   size_t k;
-  double terr, *x = NULL, maxerr, max_err = 0.0, totalerr = 0.0, avgerr;
+  double terr, *x = NULL, maxerr, totalerr, avgerr;
   int restarting = 0, continuing = 0;
   timeval time0, time1;
   long total_time = 0, start_time;
@@ -1157,19 +1202,17 @@ check (int q, char *expectedResidue)
     }
   do
     {				/* while (restarting) */
-      maxerr = 0.0; max_err = 0.0; totalerr = 0.0; j = 1L;
+      maxerr = totalerr = 0.0; j = 1L;
+      
       if (fftlen)
 	n = fftlen;
-      else {
-        #ifdef TEST
-        printf("Exp = %d, Exp/20 = %d\n", q, q/20);
-        #endif
-	   n = choose_fft_length( n );
-      }
+      else        
+	n = choose_fft_length(q, &fft_index);
+
       if ((n / threads) > 65535)
 	{
 	  fprintf (stderr, "over specifications Grid = %d\n", (int) n / threads);
-	  fprintf (stderr, "try increasing threads or decreasing FFT length\n\n");
+	  fprintf (stderr, "try increasing threads (%d) or decreasing FFT length (%dK)\n\n",  threads, n/1024);
 	  exit (2);
 	}
       if (!expectedResidue && !restarting
@@ -1198,18 +1241,17 @@ check (int q, char *expectedResidue)
       last = q - 2;		/* the last iteration done in the primary loop */
       
       if( !continuing ) {
-        int temp = t_f; t_f = 1; // Override for extra safety
         printf("Running careful round off test for 1000 iterations. If average error >= 0.25, the test will restart with a larger FFT length.\n"); 
+        #ifdef EBUG
         printf("n is %d\n", n);
+        #endif
         
         for (; !restarting && j < 1000; j++) // Initial LL loop; no -k, no checkpoints, quitting doesn't do anything
 	  {
 	    terr = lucas_square (x, n, j, last, (float) maxerr, 1);
 
-	    totalerr += terr;
+	    totalerr += terr; // only works if error_flag is 1 for every iteration
 	    
-	    if( terr > max_err )
-	      max_err = terr;
 	    if( terr > maxerr ) 
 	      maxerr = terr;
 	
@@ -1218,37 +1260,37 @@ check (int q, char *expectedResidue)
 	        /* n is not big enough; increase it and start over */
 		 printf
 		  ("Iteration = %d < 1000 && err = %5.5f >= 0.35, increasing n from %dK\n",
-		  j, (double) terr, (int) n/1024);
-		 n++;
+		  j, terr, (int) n/1024);
+		 fft_index++;
 		 restarting = 1;
 		 fftlen = 0; // Whatever the user entered isn't good enough, so override
 	     }
 	    else if( j % 100 == 0 ) {
 	      printf(
-	        "Iteration %d, average error = %5.5f, max error = %5.5f\n",
-	        j, totalerr/(double)j, max_err);
-	      max_err = 0.0;
-	    }
-	      
-	  }
+	        "Iteration  %d, average error = %5.5f, max error = %5.5f\n",
+	        j, totalerr/(double)j, maxerr);
+	      maxerr = 0.0;
+	    }	      
+	  } // End special/initial LL for loop; now we determine if the error is acceptable
+	  
 	if( !restarting ) {
           avgerr = totalerr/(j-1); // j should be 1000
           if( avgerr >= 0.25 ) {
-            printf("Iteration 1000, average error = %5.5f >= 0.25 (max error = %5.5f), increasing FFT length and restarting.\n", avgerr, max_err);
+            printf("Iteration 1000, average error = %5.5f >= 0.25 (max error = %5.5f), increasing FFT length and restarting.\n", avgerr, maxerr);
             fftlen = 0; // Whatever the user entered isn't good enough, so override
-            n++;
+            fft_index++;
             restarting = 1;
           } else if( avgerr < 0 ) {
             fprintf(stderr, "Something's gone terribly wrong! Avgerr = %5.5f < 0 !\n", avgerr);
           } else {
-            printf("Iteration 1000, average error = %5.5f < 0.25 (max error = %5.5f), continuing test.\n", avgerr, max_err);
+            printf("Iteration 1000, average error = %5.5f < 0.25 (max error = %5.5f), continuing test.\n", avgerr, maxerr);
             continuing = 1; // I don't think this is necessary, but just in case.
-            max_err = 0.0;
+            maxerr = 0.0;
           }
         }
-        t_f = temp; // Reset override
-      }
+      } // End special/initial testing      
       
+      if( !t_ff ) t_f = 0; // Undo t_f override from beginning of check()
       
       for (; !restarting && j <= last; j++) // Main LL loop, j should be >= 1000 unless user killed a test with j<1000
 	{
@@ -1257,15 +1299,13 @@ check (int q, char *expectedResidue)
 	  else
 	    error_flag = 0;
 
-	  terr = lucas_square (x, n, j, last, (float) maxerr, error_flag);
-
+	  terr = lucas_square (x, n, j, last, (float) maxerr, 1);
+	  
+	  if( terr > maxerr ) 
+	    maxerr = terr;
+		
 	  if (error_flag)
 	    {
-	      if( terr > max_err )
-	        max_err = terr;
-	      if( terr > maxerr ) 
-	        maxerr = terr;
-		
 	      if (terr >= 0.35)
 		    {
 		      if (t_f)
@@ -1290,7 +1330,7 @@ check (int q, char *expectedResidue)
 			  exit (2);
 			}
 		    }
-		  else		// error_flag && terr < 0.35
+		else		// error_flag && terr < 0.35
 		    {
 		      if (t_f)
 			{
@@ -1306,7 +1346,7 @@ check (int q, char *expectedResidue)
 	      int ret = printbits (x, q, n, b, c, high, low, 64, 0, expectedResidue);
 	      long diff = time1.tv_sec - time0.tv_sec;
 	      long diff1 = 1000000 * diff + time1.tv_usec - time0.tv_usec;
-	      printf (" err = %4.4f (", max_err);
+	      printf (" err = %4.4f (", maxerr);
 	      print_time_from_seconds (diff);
 	      printf (" real, %4.4f ms/iter, ETA ",
 		      diff1 / 1000.0 / checkpoint_iter);
@@ -1314,14 +1354,14 @@ check (int q, char *expectedResidue)
 	      print_time_from_seconds (diff);
 	      printf (")\n");
 	      fflush (stdout);
-	      max_err = 0.0; // Instead of tracking max_err over whole run, reset it at each checkpoint.
+	      maxerr = 0.0; // Instead of tracking maxerr over whole run, reset it at each checkpoint.
 	      gettimeofday (&time0, NULL);
 	      if (expectedResidue) 
 	      {
 		j = last + 1;
 		if (ret)
 		  printf
-		  ("\nExpected residue [%s] does not match actual residue [%s]\n\n",
+		  ("Expected residue [%s] does not match actual residue [%s]\n\n",
 	          expectedResidue, s_residue);
 	        else printf("This residue is correct.\n\n");
 	      }
@@ -1386,6 +1426,7 @@ check (int q, char *expectedResidue)
 	    printbits (x, q, n, b, c, high, low, 64, fp, 0);
 	    printf (". Estimated total time: ");
 	    print_time_from_seconds( total_time );
+	    printf (" .\n");
 	  } else {
 	    printbits (x, q, n, b, c, high, low, 64, fp, 0);
 	  }
@@ -1406,7 +1447,7 @@ check (int q, char *expectedResidue)
   return (0);
 }
 
-void parse_args(int* argc, char* *argv[], int* q, int* device_numer, 
+void parse_args(int argc, char *argv[], int* q, int* device_numer, 
 		int* cufftbench_s, int* cufftbench_e, int* cufftbench_d);
 		/* The rest of the opts are global */
 int main (int argc, char *argv[])
@@ -1426,20 +1467,21 @@ int main (int argc, char *argv[])
   
   /* "Production" opts to be read in from command line or ini file */
   int q = -1;
-  int device_number = -1;
+  int device_number = -1, l_f = 0;
   checkpoint_iter = -1;
   threads = -1;
   fftlen = -1;
   s_f = t_f = d_f = k_f = -1;
   polite_f = polite = -1;
   input_filename[0] = RESULTSFILE[0] = 0; /* First character is null terminator */
+  char fft_str[132] = "\0";
   
   /* Non-"production" opts */
   r_f = 0;
   int cufftbench_s, cufftbench_e, cufftbench_d;  
   cufftbench_s = cufftbench_e = cufftbench_d = 0;
 
-  parse_args(&argc, &argv, &q, &device_number, &cufftbench_s, &cufftbench_e, &cufftbench_d);
+  parse_args(argc, argv, &q, &device_number, &cufftbench_s, &cufftbench_e, &cufftbench_d);
   /* The rest of the args are globals */
   
   if (file_exists(INIFILE))
@@ -1467,7 +1509,7 @@ int main (int argc, char *argv[])
     /* I've readded the warnings about worktodo and results due to the planned multiple-instances-in-one-dir feature. */
    if( !RESULTSFILE[0] && 		!IniGetStr(INIFILE, "ResultsFile", RESULTSFILE, "results.txt") )
     fprintf(stderr, "Warning: Couldn't parse ini file option ResultsFile; using default \"results.txt\"\n");
-   if( fftlen < 0 && 			!IniGetInt(INIFILE, "FFTLength", &fftlen, 0) )
+   if( fftlen < 0 && 			!IniGetStr(INIFILE, "FFTLength", fft_str, "\0") )
     fprintf(stderr, "Warning: Couldn't parse ini file option FFTLength; using autoselect.\n");
   }
   else // no ini file
@@ -1486,6 +1528,9 @@ int main (int argc, char *argv[])
       if( !RESULTSFILE[0] ) sprintf(RESULTSFILE, "results.txt");
   }
   
+  if( fftlen < 0 ) { // Only possible if not on command line and not in ini file 
+      fftlen = fft_from_str(fft_str);
+  }
   if (polite == 0) {
     polite_f = 0;
     polite = 1;
@@ -1496,21 +1541,14 @@ int main (int argc, char *argv[])
 	      && threads != 256 && threads != 512 && threads != 1024)
   {
     fprintf(stderr, "Error: thread count is invalid.\n");
-    fprintf(stderr, "Threads must be 2^k, 5 <= k <= 10.\n");
+    fprintf(stderr, "Threads must be 2^k, 5 <= k <= 10.\n\n");
     exit(2);
   }
+  if( fftlen > 0 ) // if the user has given an override...
+    l_f = fftlen;  // then note this length must be kept between tests
+    
   
   init_device (device_number);
-  
-  #ifdef TEST
-  for(threads = 32; threads <= 1024; threads *= 2)
-    cufftbench (128*threads, 65535*threads, 128*threads);
-    /* See ini file comment on FFT length; from a post by msft, I inferred that FFT length must be 
-    a multiple of 128*threads; in turn, from the "over Grid specifications" warning test in 
-    check(), we see that 65535 is the upper bound on n/threads. Thus this loop tests all
-    possible FFT lengths for all possible thread counts. */
-  exit(0);
-  #else
 
   if (r_f)
     {
@@ -1569,50 +1607,42 @@ int main (int argc, char *argv[])
 	#ifdef EBUG
 	printf("Processed INI file and console arguments correctly; about to call get_next_assignment().\n");
 	#endif
-	do { //! while(!quitting)
+	do { // while(!quitting)
+	
+	  if( l_f > 0 )    // This is necessary; if the user gave an fftlen override (-f or ini file)... 
+	    fftlen = l_f;  // ...then we must remember it, 
+	  else             // ...or... 
+	    fftlen = 0;    // ...we need to reset fftlen if it was written to by the work file 
+	                   
   	  error = get_next_assignment(input_filename, &q, &fftlen, &AID);
   	  /* Guaranteed to write to fftlen ONLY if specified on workfile line, so that if unspecified, the pre-set
   	  default is kept. */
-	  if( error ) exit (2); 
-	  //! get_next_assignment prints warning message
+	  if( error ) exit (2); // get_next_assignment prints warning message	  
 	  #ifdef EBUG
-	  printf("Gotten assignment, about to call check(). (This is really weird if you're seeing this.)\n");
+	  printf("Gotten assignment, about to call check().\n");
 	  #endif
+	  
 	  check (q, 0);
 	  
-	  if(!quitting) //! Only clear assignment if not killed by user, i.e. test finished 
+	  if(!quitting) // Only clear assignment if not killed by user, i.e. test finished 
 	    {
 	      error = clear_assignment(input_filename, q);
-	      if(error) {
-	        if( error==3 )
-	          fprintf(stderr, "Can't open workfile %s\n\n", input_filename);
-	        else if( error==4 )
-	          fprintf(stderr, "Can't open tmp workfile\n\n");
-	        else if( error==5 )
-	          fprintf(stderr, "Assignment M%d completed but not found in workfile\n\n", q);
-	        else if( error==6 )
-	          fprintf(stderr, "Cannot move tmp workfile to regular workfile\n\n");
-	        exit (2);
-	      } //! No error
-	    } //! Not quitting
-	  } while(!quitting);  
-    } else //! Exponent passed in as argument
+	      if(error) exit (2); // prints its own warnings
+	    }
+	    
+	} while(!quitting);  
+    } else // Exponent passed in as argument
 	{
 	  if (!valid_assignment(q, fftlen)) {printf("\n");} //! v_a prints warning
-	  else {
+	  else
 	    check (q, 0);
-	  }
 	}
-    }
-    #endif /* #ifdef TEST */
+    } // if(-r) else if(-cufft) else(workfile) }
 }
 
-void parse_args(int* _argc, char* *_argv[], int* q, int* device_number, 
+void parse_args(int argc, char *argv[], int* q, int* device_number, 
 		int* cufftbench_s, int* cufftbench_e, int* cufftbench_d)
 {
-int argc = *_argc;
-char** argv = *_argv; /* Dereference the pointers */
-
 while (argc > 1)
     {
       if (strcmp (argv[1], "-t") == 0)
@@ -1628,31 +1658,33 @@ while (argc > 1)
       	  fprintf (stderr,
 	       "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads 32|64|128|256|512|1024] [-c checkpoint_iteration] [-f fft_length] [-s folder] [-t] [-polite iteration] [-k] exponent|input_filename\n\n");
       	  fprintf (stderr,
-	       "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads 32|64|128|256|512|1024] [-t] [-polite iteration] -r\n\n");
+	       "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads 32|64|128|256|512|1024] [-polite iteration] -r\n\n");
       	  fprintf (stderr,
 	       "$ CUDALucas [-d device_number] [-info] -cufftbench start end distance\n\n");
 	  fprintf (stderr,
-	       "                       -h print this help message\n");
+	       "                       -h          print this help message\n");
 	  fprintf (stderr,
-	       "                       -info print device information\n");
+	       "                       -v          print version number\n");
 	  fprintf (stderr,
-	       "                       -i set .ini file name (default = \"CUDALucas.ini\")\n");
+	       "                       -info       print device information\n");
+	  fprintf (stderr,
+	       "                       -i          set .ini file name (default = \"CUDALucas.ini\")\n");
       	  fprintf (stderr,
-	       "                       -threads set threads number (default=256)\n");
+	       "                       -threads    set threads number (default = 256)\n");
       	  fprintf (stderr,
-	       "                       -f set fft length (if round off error then exit)\n");
+	       "                       -f          set fft length (if round off error then exit)\n");
       	  fprintf (stderr,
-	       "                       -s save all checkpoint files\n");
+	       "                       -s          save all checkpoint files\n");
       	  fprintf (stderr,
-	       "                       -t check round off error all iterations\n");
+	       "                       -t          check round off error all iterations\n");
       	  fprintf (stderr,
-	       "                       -polite GPU polite per iteration (default -polite 1) -polite 0 GPU aggressive\n");
+	       "                       -polite     GPU is polite every n iterations (default -polite 1) (-polite 0 = GPU aggressive)\n");
       	  fprintf (stderr,
 	       "                       -cufftbench exec CUFFT benchmark (Ex. $ ./CUDALucas -d 1 -cufftbench 1179648 6291456 32768 )\n");
       	  fprintf (stderr, 
-      	       "                       -r exec residue test.\n");
+      	       "                       -r          exec residue test.\n");
       	  fprintf (stderr,
-	       "                       -k enable keys (p change -polite, t disable -t, s change -s)\n\n");
+	       "                       -k          enable keys (p change -polite, t disable -t, s change -s)\n\n");
       	  exit (2);          
       	}
       else if (strcmp (argv[1], "-v") == 0)
@@ -1770,28 +1802,7 @@ while (argc > 1)
 	      fprintf (stderr, "can't parse -f option\n\n");
 	      exit (2);
 	    }
-	  char* endptr, * ptr = argv[2];
-	  int mult = 0;
-	  while( *ptr ) {
-	    if( *ptr == 'k' || *ptr == 'K' ) {
-	      mult = 1024;
-	      break;
-	    }
-	    if( *ptr == 'm' || *ptr == 'M' ) {
-	      mult = 1024*1024;
-	      break;
-	    }
-	    ptr++;
-	  }
-	  if( !mult ) { // No K or M, treat as before (PS The Python else clause for loops I mention in parse.c would be useful here :) )
-	    mult = 1;
-	    ptr = endptr = NULL;
-	  }
-	  fftlen = (int) strtoul(argv[2], &endptr, 10)*mult;
-	  if( endptr != ptr ) { // The K or M must directly follow the num (or NULL == NULL)
-	    fprintf (stderr, "can't parse -f option\n\n");
-	    exit (2);
-	  }
+	  fftlen = fft_from_str(argv[2]);
 	  argv += 2;
 	  argc -= 2;
 	}

@@ -1,5 +1,5 @@
 NAME = CUDALucas
-VERSION = 2.04 Alpha
+VERSION = 2.04 Beta
 OptLevel = 3
 OUT = $(NAME)
 CUDA = /usr/local/cuda
@@ -26,7 +26,7 @@ CUDALucas.o: CUDALucas.cu parse.h cuda_safecalls.h
 	$(CUC) $(CUFLAGS) -c $<
 
 parse.o: parse.c
-	$(CC) $(CFLAGS) -c $^
+	$(CC) $(CFLAGS) -c $<
 
 clean: 
 	rm -f *.o
