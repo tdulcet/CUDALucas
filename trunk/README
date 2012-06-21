@@ -178,8 +178,8 @@ It is safe to kill CUDALucas with a Ctrl+C (or by most any other method) at any
 time. It will write a save file and exit. When you next run CUDALucas, it will
 detect that there is a save file and resume.
 
-Please feel free to ask for help on SourceForge or MersenneForum if this isn't
-clear.
+Please feel free to ask for help on SourceForge or MersenneForum.org if this 
+isn't clear.
 
 
 
@@ -223,12 +223,12 @@ Getting work:
             number is prime, it would be a world record. "Smallest available
             first time tests" might be not-World-record, though practically 
             it's exactly the same as "World record tests". "100 million digits"
-            is way beyond what's currently feasible, and will take months or years
+            is way what's currently feasible, and will take months or years
             to complete one test. This isn't recommended. Finally, "Double Check
             tests" is where you get numbers that have been tested once, but 
             haven't been double checked. Though Double Checking sounds less 
             glamorous, we currently recommend this work type. Not only are the 
-            assignments shorter, but at the moment, two matching CUDALucas
+            assignments much shorter, but at the moment, two matching CUDALucas
             tests will not mark an number as "Double Checked". (This is for 
             safety reasons, and hopefully we'll add more functionality in the
             future to remove this restriction.) What this means is that it's 
@@ -237,10 +237,10 @@ Getting work:
     Step 5) Click the button "Get Assignments"
     Step 6) Copy and paste the "Test=..." (or "DoubleCheck=...") lines directly 
             into your work file (default "worktodo.txt") in your CUDALucas
-            directory. 
+            directory.
 
 
-Now you're all set. :) Just launch CUDALucas and watch it crunch :)
+Now you're all set. Just launch CUDALucas and watch it crunch :)
 
 Once CUDALucas has finished a test, report the result to PrimeNet:
     Step 1) go to http://www.mersenne.org/ and (optionally) login with your 
@@ -253,14 +253,7 @@ Once CUDALucas has finished a test, report the result to PrimeNet:
     Step 4) Once PrimeNet responds with a verification message, you can either
             delete your results file or move the data to a different file.
 
-Advanced usage (set the FFT length):
-    At the moment, CUDALucas' FFT length autoselection is not as optimal as it
-    could be. This is on the to do list to improve, but in the meantime it is
-    possible to manually select this either in the .ini file or with the -f
-    option. There are quite a few caveats, namely that this length is used for 
-    all exponents in the work file. See the description in the ini file for 
-    more details.
-    
+Advanced usage (set the FFT length):    
     Recently (since 2.04) you can now specify the FFT length by adding a field
     to the "Test=..." assignment line in the work file. To use (e.g.) a 1440K 
     length for a test, the line should look like 
@@ -283,6 +276,9 @@ Advanced usage (set the FFT length):
 - The GUI of your OS might be very laggy while running CUDALucas. (Newer GPUs
   with compute capabilty 2.0 or higher can handle this _MUCH_ better.)
   If you're experiencing this problem, try setting "Polite" to 1 in CUDALucas.ini.
+- The very first checkpoint after a restart appears to have very quick iteration
+  times, but aren't actually that fast. The second checkpoint and beyond appear
+  normal.
 
 
 
@@ -291,9 +287,9 @@ Advanced usage (set the FFT length):
 ############
 
 Read CUDALucas.ini (you should have already read it in any case). Some options
-to look at are "Polite", "Threads", and "FFTLength". You can also activate
-extra error checking, as well as an option to save all checkpoint files instead
-of just the most recent ones.
+to look at are "Polite", "Threads", and "CheckRoundOffAllIterations". You can 
+also activate as an option to save all checkpoint files instead of just the most 
+recent ones.
 
 
 
@@ -309,12 +305,22 @@ A Yes, with the exception that a single instance of CUDALucas can only use one
   specific CUDALucas instance. Please read the next question, too.
 
 Q Can I run multiple instances of CUDALucas on the same computer?
-A Yes! You need a separate directory for each instance of CUDALucas. (We plan to
-  remove this restriction in version 2.04.)
+A Yes! You can even run more than one instance from the same dir. Use the
+  "CUDALucas -i <ini filename>" command line option to specify an INI file other
+  than the default "CUDALucas.ini". Each instance must have its own work file, 
+  however it is safe for all instances to print to the same results file. 
 
 Q Can I continue (load a checkpoint) from a 32bit version of CUDALucas with a
   64bit version of CUDALucas (and vice versa)?
 A Yes!
+
+Q Can I continue (load a checkpoint) from an older version of CUDALucas with a
+  newer verwion of CUDALucas (and vice versa)?
+A Yes, but be careful. All versions starting with 2.xx should be compatible, as
+  well as a few earlier versions (e.g. 1.6x) however, before then, it should be
+  considered unsafe unless you wade through the MersenneForum CUDALucas thread
+  to find out when the format changed. This question and answer will also be
+  updated if the format changes in the future.
 
 Q Version numbers
 A Release numbers are X.XX, where the first number has now reached 2, and the
@@ -328,14 +334,13 @@ A Release numbers are X.XX, where the first number has now reached 2, and the
 # 8 To do #
 ###########
 
-2.04:
-- Add support for multiple instances in one directory (method will be the same
-    as mfakto)
+2.05:
+- Add log file support.
 
 TBA:
 - Much of the code is placed in the wrong functions, so the interface between
-    functions is often extremely awkward. I'd like to fix this, though it's a
-    lot of work for no tangible benefit.
+    functions is often extremely awkward. I'd like to fix this, especially since
+    it will go a long way to adding log functionality for 2.05.
 - automatic primenet interaction (Eric Christenson is working on this for mfaktc)         
                            ^ specification draft exists
   - This will mean users don't have to manually get and report work from PrimeNet

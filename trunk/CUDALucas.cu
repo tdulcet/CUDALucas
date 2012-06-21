@@ -17,7 +17,7 @@ char program[] = "CUDALucas v2.04 Beta";
 #include <assert.h>
 #include <time.h>
 #include <signal.h>
-#ifdef linux
+#ifndef _MSC_VER
 #include <sys/types.h>
 #include <sys/stat.h>
 #else
@@ -201,7 +201,7 @@ asm ("cvt.rni.f64.f64 %0, %1;": "=d" (y):"d" (x));
   return (y);
 }
 
-#ifndef linux
+#ifdef _MSC_VER
 long long int __double2ll (double);
 #endif
 __device__ static long long int
@@ -725,16 +725,16 @@ then we assume it's a manual fftlen and return the proper index. */
                           23040, 24576, 25600, 27648, 30720, 32000, 
                           32768, 34992, 36864, 38400, 40960, 46080,
                           49152, 51200, 55296, 61440, 65536         };
-  // Largely copied from Prime95's jump tables
+  // Largely copied from Prime95's jump tables, up to 32M
   // Support up to 64M, the maximum length with threads == 1024
   if( 0 <= *index && *index < COUNT ) // override
     return 1024*multipliers[*index];  
-  else if( *index >= COUNT ) 
-  { /* override with manual fftlen passed as arg; set pointer to largest index < fftlen */
+  else if( *index >= COUNT || q == 0) 
+  { /* override with manual fftlen passed as arg; set pointer to largest index <= fftlen */
     int len, i;
     for(i = COUNT - 1; i >= 0; i--) {
       len = 1024*multipliers[i];
-      if( len < *index )
+      if( len <= *index )
       {
         *index = i;
         return len; /* not really necessary, but now we could decide to override 
@@ -1050,6 +1050,11 @@ read_checkpoint (int q, int *n, int *j, long* total_time)
     *total_time = -1;
   } else {
     *total_time = time_r;
+    #ifdef EBUG
+    printf("Total time read from save file: ");
+    print_time_from_seconds(time_r);
+    printf("\n");
+    #endif
   }
   
   // have good stuff, do checkpoint
@@ -1065,8 +1070,8 @@ write_checkpoint (double *x, int q, int n, int j, long total_time)
   FILE *fPtr;
   char chkpnt_cfn[32];
   char chkpnt_tfn[32];
-  sprintf (chkpnt_cfn, "c" "%d", q);
-  sprintf (chkpnt_tfn, "t" "%d", q);
+  sprintf (chkpnt_cfn, "c%d", q);
+  sprintf (chkpnt_tfn, "t%d", q);
   (void) unlink (chkpnt_tfn);
   (void) rename (chkpnt_cfn, chkpnt_tfn);
   fPtr = fopen (chkpnt_cfn, "wb");
@@ -1081,12 +1086,15 @@ write_checkpoint (double *x, int q, int n, int j, long total_time)
   fwrite (&total_time, 1, sizeof(total_time), fPtr);
   #ifdef EBUG
   printf("Total time is %ld\n", total_time);
+  printf("Total time again: ");
+  print_time_from_seconds(total_time);
+  printf("\n");
   #endif
   fclose (fPtr);
   if (s_f > 0)			// save all checkpoint files
     {
       char chkpnt_sfn[64];
-#ifdef linux
+#ifndef _MSC_VER
       sprintf (chkpnt_sfn, "%s/s" "%d.%d.%s", folder, q, j, s_residue);
 #else
       sprintf (chkpnt_sfn, "%s\\s" "%d.%d.%s.txt", folder, q, j, s_residue);
@@ -1153,7 +1161,7 @@ SetQuitting (int sig)
  printf( " caught, writing checkpoint.");
 }
 
-#ifdef linux
+#ifndef _MSC_VER
 #include <termios.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -1205,6 +1213,7 @@ check (int q, char *expectedResidue)
   int restarting = 0, continuing = 0;
   timeval time0, time1;
   long total_time = 0, start_time;
+  // use start_total because every time we write a checkpoint, total_time is increased, but we don't quit everytime we write a checkpoint
   if (!expectedResidue)
     {
       // We log to file in most cases anyway.
@@ -1244,7 +1253,7 @@ check (int q, char *expectedResidue)
 	  x[0] = 4.0;
 	  j = 1;
 	  j_save = 0; // Only if(t_f) in old code
-	  
+	  total_time = 0;	  
 	}
       fflush (stdout);
       restarting = 0;
@@ -1255,43 +1264,44 @@ check (int q, char *expectedResidue)
       
       if( !continuing ) {
         printf("Running careful round off test for 1000 iterations. If average error >= 0.25, the test will restart with a larger FFT length.\n");
+        /* This isn't actually any *safer* than the previous code which had error_flag = 1 if j < 1000, 
+        but there would have been a *lot* of if statements to get the extra messages working, and there 
+        were lots of ifs already. Now there's a lot less ifs in the main code, and now we can check the 
+        average. We also reset the maxerr a lot more often (which doesn't make it *safer*, but makes the
+        average more accurate). */
         double max_err = 0.0;
         
         for (; !restarting && j < 1000; j++) // Initial LL loop; no -k, no checkpoints, quitting doesn't do anything
 	  {
 	    terr = lucas_square (x, n, j, last, &maxerr, 1);
-	    
 	    totalerr += terr; // only works if error_flag is 1 for every iteration
-	    
 	    if(terr > max_err)
-	      max_err = terr;
-	    #ifndef TEST
-	    set_err_to_0(&maxerr);
-	    #endif
-	    /* Maxerr changes how error is calculated, so for this extra-careful test,
-	       we need this extra set_err_to_0 (sort of). Thus, here we need max_err,
-	       but not in the usual case. */
-	
-	    if(terr >= 0.35)
-	      {
-	        /* n is not big enough; increase it and start over */
-		 printf
-		  ("Iteration = %d < 1000 && err = %5.5f >= 0.35, increasing n from %dK\n",
-		  j, terr, (int) n/1024);
-		 fft_index++;
-		 restarting = 1;
-		 fftlen = 0; // Whatever the user entered isn't good enough, so override
-	     }
-	    else if( j % 100 == 0 ) {
+	      max_err = terr; 
+	    // ^ This is necessary because we want to print the max_err every 100 iters, but we reset maxerr every 16 iters.
+	    if( !(j&15) )
+	    {
+	      set_err_to_0(&maxerr);
+	      if(terr >= 0.35)
+	        {
+	          /* n is not big enough; increase it and start over */
+		   printf
+	  	    ("Iteration = %d < 1000 && err = %5.5f >= 0.35, increasing n from %dK\n",
+		    j, terr, (int) n/1024);
+		   fft_index++;
+		   restarting = 1;
+		   fftlen = 0; // Whatever the user entered isn't good enough, so override
+	        }
+	    }
+	    if( j % 100 == 0 ) {
 	      printf(
 	        "Iteration  %d, average error = %5.5f, max error = %5.5f\n",
 	        j, totalerr/(double)j, max_err);
 	      max_err = 0.0;
-	    }	      
-	  } // End special/initial LL for loop; now we determine if the error is acceptable
+	    }
+	} // End special/initial LL for loop; now we determine if the error is acceptable
 	  
 	if( !restarting ) {
-          avgerr = totalerr/(j-1); // j should be 1000
+          avgerr = totalerr/(j-1); // j should be 1000, but we only did 999 iters
           if( avgerr >= 0.25 ) {
             printf("Iteration 1000, average error = %5.5f >= 0.25 (max error = %5.5f), increasing FFT length and restarting.\n", avgerr, max_err);
             fftlen = 0; // Whatever the user entered isn't good enough, so override
@@ -1318,7 +1328,7 @@ check (int q, char *expectedResidue)
 
 	  terr = lucas_square (x, n, j, last, &maxerr, error_flag);
 		
-	  if (error_flag)
+	  if (error_flag || (polite_f && !(j%polite)))
 	    {
 	      if (terr >= 0.35)
 		    {
@@ -1331,9 +1341,8 @@ check (int q, char *expectedResidue)
 			  cutilSafeCall (cudaMemcpy
 					 (x, g_save, sizeof (double) * n,
 					  cudaMemcpyDeviceToHost));
-			  if( total_time >= 0 )
-			    write_checkpoint (x, q, n, j_save + 1, total_time+(time1.tv_sec - start_time) );
-			  else write_checkpoint (x, q, n, j_save + 1, -1);
+			  if( total_time >= 0) {total_time += (time1.tv_sec - start_time);}
+			  write_checkpoint (x, q, n, j_save + 1, total_time);
 			  exit (2);
 			}
 		      else
@@ -1388,14 +1397,15 @@ check (int q, char *expectedResidue)
 	      cutilSafeCall (cudaMemcpy
 			     (x, g_x, sizeof (double) * n,
 			      cudaMemcpyDeviceToHost));
-	      if( total_time >= 0 )
+	      if( total_time >= 0 ) {
 	        total_time += (time1.tv_sec - start_time);
+	        start_time = time1.tv_sec;
+	      }
 	      write_checkpoint (x, q, n, j + 1, total_time);
 	      if (quitting == 1) {
 	        if(total_time >= 0) {
 	          printf(" Estimated time spent so far: ");
 	          print_time_from_seconds(total_time);
-	          printf("."); 
 	        }
 	        printf("\n\n");
 		j = last + 1;
@@ -1403,14 +1413,15 @@ check (int q, char *expectedResidue)
 	    }
 
 	  if ( k_f && !quitting && !expectedResidue && (!(j & 15)) && _kbhit() )
-	    interact();
+	    interact(); // abstracted to clean up check()
 	  
 	  fflush (stdout);	    
 	} /* end main LL for-loop */
+	
       if (!restarting && !expectedResidue && !quitting)
 	{
 	  gettimeofday (&time1, NULL);
-	  FILE* fp = fopen(RESULTSFILE, "a");
+	  FILE* fp = fopen_and_lock(RESULTSFILE, "a");
 	  if(!fp) {
 	    fprintf (stderr, "Cannot write results to %s\n\n", RESULTSFILE);
 	    exit (1);
@@ -1418,9 +1429,8 @@ check (int q, char *expectedResidue)
 	  printbits (x, q, n, b, c, high, low, 64, fp, 0);
 	  if( total_time >= 0 ) { /* Only print time if we don't have an old checkpoint file */
 	    total_time += (time1.tv_sec - start_time);
-	    printf (". Estimated total time: ");
+	    printf (", estimated total time = ");
 	    print_time_from_seconds(total_time);
-	    printf (".");
 	  }
 	  
 	  if( AID[0] && strncasecmp(AID, "N/A", 3) ) { // If (AID is not null), AND (AID is NOT "N/A") (case insensitive)
@@ -1428,10 +1438,10 @@ check (int q, char *expectedResidue)
 	  } else {
 	    fprintf(fp, "\n");
 	  }
-	  fclose(fp);
-	  printf("\n\n");
+	  unlock_and_fclose(fp);
 	  fflush (stdout);
 	  rm_checkpoint (q);
+	  printf("\n\n");
 	}
       close_lucas (x);
     }
@@ -1498,7 +1508,7 @@ int main (int argc, char *argv[])
     /*fprintf(stderr, "Warning: Couldn't parse ini file option PrintDeviceInfo; using default: off\n")*/;
    if( !input_filename[0] &&		!IniGetStr(INIFILE, "WorkFile", input_filename, WORKFILE_DFLT) )
     fprintf(stderr, "Warning: Couldn't parse ini file option WorkFile; using default \"%s\"\n", WORKFILE_DFLT);
-    /* I've readded the warnings about worktodo and results due to the planned multiple-instances-in-one-dir feature. */
+    /* I've readded the warnings about worktodo and results due to the multiple-instances-in-one-dir feature. */
    if( !RESULTSFILE[0] && 		!IniGetStr(INIFILE, "ResultsFile", RESULTSFILE, RESULTSFILE_DFLT) )
     fprintf(stderr, "Warning: Couldn't parse ini file option ResultsFile; using default \"%s\"\n", RESULTSFILE_DFLT);
    if( fftlen < 0 && 			!IniGetStr(INIFILE, "FFTLength", fft_str, "\0") )
@@ -1578,7 +1588,7 @@ int main (int argc, char *argv[])
     {
       if (s_f)
 	{
-#ifdef linux
+#ifndef _MSC_VER
 	  mode_t mode = S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH;
 	  if (mkdir (folder, mode) != 0)
 	    fprintf (stderr,

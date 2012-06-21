@@ -1,6 +1,8 @@
 4. Separate check() from a hypothetical test(int q, char* expectres, int iters) function used for self testing and roundoff testing
 4a. Refine print_bits() to print only the residue (related to 9a)
+10. Extending 4, implement logging abilities.
 6. Add V5UserID and ComputerID ini file options for later use
-7. Finish up results file locking
 8. Figure out compiling arches/versions
 9. Add option to not print residues at checkpoints? Option to skip extra initial error checking?
+11. Extend the self test to include a lot more expos to test all FFT lengths, as well as near crossovers.
+11a. Get a better idea of where crossovers are necessary.
