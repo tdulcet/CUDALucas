@@ -31,7 +31,7 @@ enum ASSIGNMENT_ERRORS
 #define MAX_LINE_LENGTH 131
 typedef char LINE_BUFFER[MAX_LINE_LENGTH+1];
 
-/*! We must declare these as such because CUDA is recognized as C++, a different language. See:
+/* We must declare these as such because CUDA is recognized as C++, a different language. See:
  http://forums.nvidia.com/index.php?showtopic=190973 */
 extern "C" enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, int* fft_length, LINE_BUFFER *assignment_key);
 extern "C" enum ASSIGNMENT_ERRORS clear_assignment(char *filename, int exponent);
@@ -39,8 +39,11 @@ extern "C" int valid_assignment(int exp, int fft_length);	// nonzero if assignme
 extern "C" int IniGetInt(char* ini_file, char* name, int* value, int dfault);
 extern "C" int IniGetStr(char* ini_file, char* name, char* str, char* dfault);
 extern "C" int file_exists(char* filename); // nonzero if file exists
+extern "C" FILE* fopen_and_lock(const char *path, const char *mode);
+extern "C" int unlock_and_fclose(FILE* f);
 
-#ifdef linux
+
+#ifndef _MSC_VER
 #include <sys/time.h>
 #include <unistd.h>
 #else

@@ -54,29 +54,49 @@ mfaktc 0.07-0.14 to see Luigis code.
  ************************************************************************************************************/
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <limits.h>
 #include <ctype.h>
 #include <errno.h>
-#include <stdlib.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <time.h>
 
 #define MAX_LINE_LENGTH 131
 
-#ifdef linux /* See next comment */
+#ifndef _MSC_VER /* See next comment */
   #define _fopen fopen
   #define strcopy strncpy
   #define _sprintf sprintf
+  #include <unistd.h>
+  #include <sched.h>
+  #define MODE S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH
+  static void Sleep(unsigned int ms)
+  {
+    struct timespec ts;
+    ts.tv_sec  = (time_t) ms/1000;
+    ts.tv_nsec = (ms % 1000) * 1000000;
+    nanosleep(&ts, NULL);
+  }
 #else
+  #include <Windows.h>
+  #include <io.h>
+  #undef open
+  #undef close
+  #define open _open
+  #define close _close
+  #define sched_yield SwitchToThread
+  #define MODE _S_IREAD | _S_IWRITE
   #define strncasecmp _strnicmp
   
   /* Everything from here to the next include is to make MSVS happy. */
   #define sscanf sscanf_s /* This only works for scanning numbers, or strings with a defined length (e.g. "%131s") */
-
   void strcopy(char* dest, char* src, size_t n) 
   {
     strncpy_s(dest, MAX_LINE_LENGTH+1, src, n);
   }
-
   FILE* _fopen(const char* path, const char* mode) 
   {
     FILE* stream;
@@ -84,12 +104,11 @@ mfaktc 0.07-0.14 to see Luigis code.
     if(err) return NULL;
     else return stream;
   }
-  
   void _sprintf(char* buf, char* frmt, char* string)
-  {	  
-	  sprintf_s(buf, MAX_LINE_LENGTH+1, frmt, string);
+  { // only used in filelocking code
+	  sprintf_s(buf, 251, frmt, string);
   }
-
+  
   #include <winsock2.h>
   int gettimeofday(struct timeval *tv, struct timezone *unused)
   /*
@@ -267,7 +286,7 @@ output
     *endptr = *linecopy;	// by default, non-significant content is whole line
   
   #ifdef EBUG
-  printf("Line: %s", line);
+  printf("  Line: %s", line);
   #endif
 
   ptr=line;
@@ -308,7 +327,7 @@ output
     }
   }
   #ifdef EBUG
-  printf("  Scanned %d commas\n", number_of_commas);
+  printf("    Scanned %d commas\n", number_of_commas);
   #endif
   if (number_of_commas > 4)	// must have less than 5 commas... (possible fields are key,exp,fft,tf,p-1)
     return INVALID_FORMAT;
@@ -327,29 +346,29 @@ output
         ptr_end = strchr(ptr, '\0');
     }
     #ifdef EBUG
-    printf("  In main for() loop, %d commas left\n", number_of_commas);
+    printf("    In main for() loop, %d commas left\n", number_of_commas);
     #endif
     for(ptr_start = ptr; ptr_start < ptr_end; ptr_start++) { 
       
       #ifdef EBUG
-      printf("  Looping on chars, ptr_start = %c\n", *ptr_start);
+      printf("      Looping on chars, ptr_start = %c\n", *ptr_start);
       #endif
       if( ('A' <= *ptr_start && *ptr_start <= 'F') || ('a' <= *ptr_start && *ptr_start <= 'f') ) {
       // we have some sort of hex assignment key, or "N/A". Either way, it's an AID of some sort.
         #ifdef EBUG
-        printf("  Branched on AID, trigger is %c\n", *ptr_start);
+        printf("      Branched on AID, trigger is %c\n", *ptr_start);
         #endif
         strcopy(assignment->hex_key, ptr, (ptr_end - ptr));
         assignment->hex_key[ptr_end-ptr] = '\0';	// null-terminate key
         #ifdef EBUG
-        printf("Key is '%s'\n", assignment->hex_key);
+        printf("      Key is '%s'\n", assignment->hex_key);
         #endif
         goto outer_continue;
       }
       else if( *ptr_start == 'k' || *ptr_start == 'K' ) {
       // we've found a fft length field.
         #ifdef EBUG
-        printf("  Branched on FFT-K\n");
+        printf("      Branched on FFT-K\n");
         #endif
         errno = 0;
         proposed_fftlen = strtoul(ptr, &ptr2, 10) * 1024; // Don't forget the K ;)
@@ -363,7 +382,7 @@ output
       else if( *ptr_start == 'm' || *ptr_start == 'M' ) {
       // we've found a fft length field.
         #ifdef EBUG
-        printf("  Branched on FFT-M\n");
+        printf("      Branched on FFT-M\n");
         #endif
         errno = 0;
         proposed_fftlen = strtoul(ptr, &ptr2, 10) * 1024*1024; // Don't forget the M ;)
@@ -382,7 +401,7 @@ output
     // we must assume it's the exponent, except to assume that the largest number 
     // read in is the exponent (to filter out TF lim or P-1 bool)
     #ifdef EBUG
-    printf("  Branched on default\n");
+    printf("      Branched on default\n");
     #endif
     ptr_start = ptr; /* Nothing special, so reset ptr_start to the start */
     if ('M' == *ptr_start)	// M means Mersenne exponent...
@@ -394,7 +413,7 @@ output
     if(errno != 0 || proposed_exponent > INT_MAX)
       return INVALID_DATA;
     #ifdef EBUG
-    printf("  'Expo' conversion is %ld\n", proposed_exponent);
+    printf("      'Expo' conversion is %ld\n", proposed_exponent);
     #endif
     if( proposed_exponent > assignment->exponent ) // don't clobber larger values, this is our TF/P-1 filter
       assignment->exponent = (int)proposed_exponent;
@@ -406,7 +425,7 @@ output
   // now we've looped over all fields in worktodo line
   ptr = ptr_end;
   #ifdef EBUG
-  printf("  Left for()\n");
+  printf("    Left for()\n");
   #endif
   if(*ptr == '\n' || *ptr == '\0') // no comment (lol)
     assignment->comment[0] = '\0';
@@ -646,17 +665,17 @@ enum ASSIGNMENT_ERRORS clear_assignment(char *filename, int exponent)
   return OK;
 }
 
-/*!----------------------------------------------------------------------------------------------*/
-/*! These functions are slightly more modified from Oliver's equivalents. */
+/*----------------------------------------------------------------------------------------------*/
+/* These functions are slightly more modified from Oliver's equivalents. */
 
 int IniGetInt(char *inifile, char *name, int *value, int dflt)
 {
   FILE *in;
-  char buf[100];
+  char buf[MAX_LINE_LENGTH+1];
   int found=0;
   in=_fopen(inifile,"r");
   if(!in) goto error;
-  while(fgets(buf,100,in) && !found)
+  while(fgets(buf,MAX_LINE_LENGTH,in) && !found)
   {
     if(!strncmp(buf,name,strlen(name)) && buf[strlen(name)]=='=')
     {
@@ -671,19 +690,143 @@ int IniGetInt(char *inifile, char *name, int *value, int dflt)
 int IniGetStr(char *inifile, char *name, char *string, char* dflt)
 {
   FILE *in;
-  char buf[100];
+  char buf[MAX_LINE_LENGTH+1];
   int found=0;
   in=_fopen(inifile,"r");
   if(!in)
     goto error;
-  while(fgets(buf,100,in) && !found)
+  while(fgets(buf,MAX_LINE_LENGTH,in) && !found)
   {
     if(!strncmp(buf,name,strlen(name)) && buf[strlen(name)]=='=')
     {
-      if(sscanf(&(buf[strlen(name)+1]),"%131s",string)==1)found=1; // CuLu's char*'s are 132 bytes
+      if(sscanf(&(buf[strlen(name)+1]),"%131s",string)==1)found=1; // CuLu's strs are 132 bytes
     }
   }
   fclose(in);
   if(found)return 1;
-  error: _sprintf(string, "%s", dflt); return 0;
+  error: strcopy(string, dflt, MAX_LINE_LENGTH); return 0;
+}
+
+/*****************************************************************************/
+/*      mfakto's file locking code                                           */
+
+#define MAX_LOCKED_FILES 3
+
+typedef struct _lockinfo
+{
+  int       lockfd;
+  FILE *    open_file;
+  char      lock_filename[256];
+} lockinfo;
+
+static unsigned int num_locked_files = 0;
+static lockinfo     locked_files[MAX_LOCKED_FILES];
+
+FILE *fopen_and_lock(const char *path, const char *mode)
+{
+  unsigned int i;
+  int lockfd;
+  FILE *f;
+  #ifdef EBUG
+  printf("\nlock() called on %s\n", path);
+  #endif
+
+  if (strlen(path) > 250)
+  {
+    fprintf(stderr, "Cannot open %.250s: Name too long.\n", path);
+    return NULL;
+  }
+
+  if (num_locked_files >= MAX_LOCKED_FILES)
+  {
+    fprintf(stderr, "Cannot open %.250s: Too many locked files.\n", path);
+    return NULL;
+  }
+
+  _sprintf(locked_files[num_locked_files].lock_filename, "%.250s.lck", path);
+
+  for(i=0;;)
+  {
+    if ((lockfd = open(locked_files[num_locked_files].lock_filename, O_EXCL | O_CREAT, MODE)) < 0)
+    {
+      if (errno == EEXIST)
+      {
+        if (i==0) fprintf(stderr, "%.250s is locked, waiting ...\n", path);
+        if (i<1000) i++; // slowly increase sleep time up to 1 sec
+        Sleep(i);
+        continue;
+      }
+      else
+      {
+        perror("Cannot open lockfile");
+        break;
+      }
+    }
+    break;
+  }
+
+  locked_files[num_locked_files].lockfd = lockfd;
+
+  if (lockfd > 0 && i > 0)
+  {
+    printf("Locked %.250s\n", path);
+  }
+
+  f=fopen(path, mode);
+  if (f)
+  {
+    locked_files[num_locked_files++].open_file = f;
+  }
+  else
+  {
+    if (close(locked_files[num_locked_files].lockfd) != 0) perror("Failed to close lockfile");
+    if (remove(locked_files[num_locked_files].lock_filename)!= 0) perror("Failed to delete lockfile");
+  }
+  #ifdef EBUG
+  printf("successfully locked %s\n", path);
+  #endif
+  #ifdef TEST
+  while(1);
+  #endif
+
+  return f;
+}
+
+int unlock_and_fclose(FILE *f)
+{
+  unsigned int i, j;
+  int ret;
+  #ifdef EBUG
+  printf("unlock() called\n");
+  #endif
+
+  if (f == NULL) return -1;
+
+  for (i=0; i<num_locked_files; i++)
+  {
+    if (locked_files[i].open_file == f)
+    {
+      ret = fclose(f);
+      f = NULL;
+      if (close(locked_files[i].lockfd) != 0) perror("Failed to close lockfile");
+      if (remove(locked_files[i].lock_filename)!= 0) perror("Failed to delete lockfile");
+      for (j=i+1; j<num_locked_files; j++)
+      {
+        locked_files[j-1].lockfd = locked_files[j].lockfd;
+        locked_files[j-1].open_file = locked_files[j].open_file;
+        strcpy(locked_files[j-1].lock_filename, locked_files[j].lock_filename);
+      }
+      num_locked_files--;
+      break;
+    }
+  }
+  if (f)
+  {
+    fprintf(stderr, "File was not locked!\n");
+    ret = fclose(f);
+  }
+  #ifdef EBUG
+  printf("successfully unlocked\n");
+  #endif
+  return ret;
 }

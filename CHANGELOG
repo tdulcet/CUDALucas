@@ -33,9 +33,14 @@ New in 2.04:
      understand. (Thanks James!) (Unfortunately, it seems that PrimeNet doesn't
      actually do anyhting with that AID.)
      
-   - The first 1000 iterations now use extra error checking, and also calculate average
-     error. If average error >= 0.25, then the test will be restarted with a 
-     longer FFT length.
+   - The first 1000 iterations now use extra error checking (same as -t), and 
+     also calculate average error. If average error >= 0.25, then the test will 
+     be restarted with a longer FFT length.
      
    - FFT selection should be somewhat better now, though not almost-perfect like
      Prime95. I did get a table of lengths from Prime95's tables.
+     
+   - Added mfakto's file locking code for results.txt. It should now be possible
+     to run more than one instance in one directory with the -i option.
+   
+   - Changed "#ifdef linux" to "#ifndef _MSC_VER"

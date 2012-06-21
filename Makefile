@@ -34,7 +34,7 @@ cleaner:
 	rm -f $(NAME) debug_$(NAME) test_$(NAME)
 cleanest: clean cleaner
 
-debug: CFLAGS += -DEBUG	-g
+debug: CFLAGS += -DEBUG -g
 debug: CUFLAGS += -DEBUG -g
 debug: OptLevel = 0
 debug: OUT = debug_$(NAME)
