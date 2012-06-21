@@ -436,6 +436,12 @@ close_lucas (double *x)
   cufftSafeCall (cufftDestroy (plan));
 }
 
+void set_err_to_0(float* maxerr)
+{
+  cutilSafeCall (cudaMemset (g_err, 0, sizeof (float)));
+  *maxerr = 0.0;
+}
+
 template < int g_err_flag > __global__ void
 normalize_kernel (double *g_x, int threads,
 		  volatile float *g_err, int *g_carry, int *g_mask,
@@ -630,7 +636,7 @@ last_normalize (double *x, int N, int err_flag)
 }
 
 double
-lucas_square (double *x, int N, int iter, int last, float maxerr,
+lucas_square (double *x, int N, int iter, int last, float* maxerr,
 	      int error_flag)
 {
   double terr;
@@ -659,7 +665,7 @@ lucas_square (double *x, int N, int iter, int last, float maxerr,
 							      g_mask, g_ttp,
 							      g_ttmp,
 							      g_numbits,
-							      maxerr);
+							      *maxerr);
 	}
       else
 	{
@@ -668,25 +674,21 @@ lucas_square (double *x, int N, int iter, int last, float maxerr,
 							      g_mask, g_ttp,
 							      g_ttmp,
 							      g_numbits,
-							      maxerr);
+							      *maxerr);
 	}
       normalize2_kernel <<< ((N + threads - 1) / threads + 127) / 128,
 	128 >>> (g_x, threads, g_carry, N, g_inv2, g_ttp2, g_ttmp2, g_inv3,
 		 g_ttp3, g_ttmp3);
-      {
-	float l_err;
-	if (polite_f && (iter % polite) == 0)
-	  cutilSafeCall (cudaMemcpy
-			 (&l_err, g_err, sizeof (float),
-			  cudaMemcpyDeviceToHost));
-      }
+     
       terr = 0.0;
-      if (error_flag)
+      if (error_flag || (polite_f && (iter % polite) == 0))
 	{
 	  float c_err;
 	  cutilSafeCall (cudaMemcpy
 			 (&c_err, g_err, sizeof (float),
 			  cudaMemcpyDeviceToHost));
+	  if(c_err > *maxerr)
+	    *maxerr = c_err;
 	  terr = c_err;
 	}
     }
@@ -695,7 +697,7 @@ lucas_square (double *x, int N, int iter, int last, float maxerr,
 
 /**************************************************************************
  *                                                                        *
- *               End LL Functions, Begin Utility Functions                *
+ *       End LL/GPU Functions, Begin Utility/CPU Functions                *
  *                                                                        *
  **************************************************************************/
 
@@ -705,11 +707,8 @@ choose_fft_length (int q, int* index)
 /* In order to increase length if an exponent has a round off issue, we use an
 extra paramter that we can adjust on the fly. In check(), index starts as -1,
 the default. In that case, choose from the table. If index >= 0, we must assume
-it's an override and return the corresponding length. */
-  #ifdef TEST
-  printf("Exp = %d, Exp/20 = %d\n", q, q/20);
-  #endif
-
+it's an override index and return the corresponding length. If index > table-count,
+then we assume it's a manual fftlen and return the proper index. */
   #define COUNT 89
   int multipliers[COUNT] = {  6,     8,    12,    16,    18,    24, 
                              32,    40,    48,    64,    72,    80, 
@@ -728,22 +727,34 @@ it's an override and return the corresponding length. */
                           49152, 51200, 55296, 61440, 65536         };
   // Largely copied from Prime95's jump tables
   // Support up to 64M, the maximum length with threads == 1024
-  
   if( 0 <= *index && *index < COUNT ) // override
     return 1024*multipliers[*index];  
-  else // not override, choose length and set pointer to proper index
-  {  
-    int len, estimate = q/20, i = 0;
-    do {
+  else if( *index >= COUNT ) 
+  { /* override with manual fftlen passed as arg; set pointer to largest index < fftlen */
+    int len, i;
+    for(i = COUNT - 1; i >= 0; i--) {
+      len = 1024*multipliers[i];
+      if( len < *index )
+      {
+        *index = i;
+        return len; /* not really necessary, but now we could decide to override 
+        fftlen with this value here */
+      }
+    }
+  }
+  else  
+  { // *index < 0, not override, choose length and set pointer to proper index
+    int len, i, estimate = q/20;
+    for(i = 0; i < COUNT; i++) {
       len = 1024*multipliers[i];
       if( len >= estimate ) 
       {
         *index = i;
         return len;
       }
-    } while( ++i < COUNT);
-    return 0;
+    }
   }
+  return 0;
 }
 
 int fft_from_str(const char* str)
@@ -886,9 +897,7 @@ is_zero (double *x, int n, int mask, int shift)
 }
 
 int
-printbits (double *x,
-	   int q,
-	   int N,
+printbits (double *x, int q, int N,
 	   int b, int c, double high, double low, int totalbits,
 	   FILE* fp, char *expectedResidue)
 {
@@ -998,8 +1007,8 @@ read_checkpoint (int q, int *n, int *j, long* total_time)
   double *x;
   char chkpnt_cfn[32];
   char chkpnt_tfn[32];
-  sprintf (chkpnt_cfn, "c" "%d", q);
-  sprintf (chkpnt_tfn, "t" "%d", q);
+  sprintf (chkpnt_cfn, "c%d", q);
+  sprintf (chkpnt_tfn, "t%d", q);
   fPtr = fopen (chkpnt_cfn, "rb");
   if (!fPtr)
     {
@@ -1140,8 +1149,8 @@ void
 SetQuitting (int sig)
 {
   quitting = 1;
- sig==SIGTERM ? fprintf(stderr, "\tSIGTERM") : (sig==SIGINT ? fprintf(stderr, "\tSIGINT") : fprintf(stderr, "\tUnknown signal")) ;
- fprintf(stderr, " caught. Writing checkpoint.\n\n");
+ sig==SIGINT ? printf( "\tSIGINT") : (sig==SIGTERM ? printf( "\tSIGTERM") : printf( "\tUnknown signal")) ;
+ printf( " caught, writing checkpoint.");
 }
 
 #ifdef linux
@@ -1178,6 +1187,7 @@ _kbhit (void)
 #else
 #include <conio.h>
 #endif
+void interact(void); // defined below everything else
 /**************************************************************
  *
  *      Main Function
@@ -1187,10 +1197,11 @@ int
 check (int q, char *expectedResidue)
 {
   int n, j = 1L, last = 2L, error_flag;
-  int t_ff = t_f; t_f = 1; /* Override for round off test, deactivate later */
+  int t_ff = t_f; t_f = 1; /* Override for round off test, deactivate before actual test */
   int fft_index = -1; // See the comments of choose_length() for an explanation
   size_t k;
-  double terr, *x = NULL, maxerr, totalerr, avgerr;
+  double terr, *x = NULL, totalerr, avgerr;
+  float maxerr;
   int restarting = 0, continuing = 0;
   timeval time0, time1;
   long total_time = 0, start_time;
@@ -1202,11 +1213,13 @@ check (int q, char *expectedResidue)
     }
   do
     {				/* while (restarting) */
-      maxerr = totalerr = 0.0; j = 1L;
+      totalerr = maxerr = 0.0; j = 1L;
       
-      if (fftlen)
+      if (fftlen) {
 	n = fftlen;
-      else        
+	choose_fft_length(0, &fftlen); // set fftindex to the largest index < fftlen,
+	fft_index = fftlen;            // so that fft_index++ works even for manual lengths
+      } else        
 	n = choose_fft_length(q, &fft_index);
 
       if ((n / threads) > 65535)
@@ -1241,19 +1254,23 @@ check (int q, char *expectedResidue)
       last = q - 2;		/* the last iteration done in the primary loop */
       
       if( !continuing ) {
-        printf("Running careful round off test for 1000 iterations. If average error >= 0.25, the test will restart with a larger FFT length.\n"); 
-        #ifdef EBUG
-        printf("n is %d\n", n);
-        #endif
+        printf("Running careful round off test for 1000 iterations. If average error >= 0.25, the test will restart with a larger FFT length.\n");
+        double max_err = 0.0;
         
         for (; !restarting && j < 1000; j++) // Initial LL loop; no -k, no checkpoints, quitting doesn't do anything
 	  {
-	    terr = lucas_square (x, n, j, last, (float) maxerr, 1);
-
+	    terr = lucas_square (x, n, j, last, &maxerr, 1);
+	    
 	    totalerr += terr; // only works if error_flag is 1 for every iteration
 	    
-	    if( terr > maxerr ) 
-	      maxerr = terr;
+	    if(terr > max_err)
+	      max_err = terr;
+	    #ifndef TEST
+	    set_err_to_0(&maxerr);
+	    #endif
+	    /* Maxerr changes how error is calculated, so for this extra-careful test,
+	       we need this extra set_err_to_0 (sort of). Thus, here we need max_err,
+	       but not in the usual case. */
 	
 	    if(terr >= 0.35)
 	      {
@@ -1268,24 +1285,24 @@ check (int q, char *expectedResidue)
 	    else if( j % 100 == 0 ) {
 	      printf(
 	        "Iteration  %d, average error = %5.5f, max error = %5.5f\n",
-	        j, totalerr/(double)j, maxerr);
-	      maxerr = 0.0;
+	        j, totalerr/(double)j, max_err);
+	      max_err = 0.0;
 	    }	      
 	  } // End special/initial LL for loop; now we determine if the error is acceptable
 	  
 	if( !restarting ) {
           avgerr = totalerr/(j-1); // j should be 1000
           if( avgerr >= 0.25 ) {
-            printf("Iteration 1000, average error = %5.5f >= 0.25 (max error = %5.5f), increasing FFT length and restarting.\n", avgerr, maxerr);
+            printf("Iteration 1000, average error = %5.5f >= 0.25 (max error = %5.5f), increasing FFT length and restarting.\n", avgerr, max_err);
             fftlen = 0; // Whatever the user entered isn't good enough, so override
             fft_index++;
             restarting = 1;
           } else if( avgerr < 0 ) {
             fprintf(stderr, "Something's gone terribly wrong! Avgerr = %5.5f < 0 !\n", avgerr);
           } else {
-            printf("Iteration 1000, average error = %5.5f < 0.25 (max error = %5.5f), continuing test.\n", avgerr, maxerr);
+            printf("Iteration 1000, average error = %5.5f < 0.25 (max error = %5.5f), continuing test.\n", avgerr, max_err);
             continuing = 1; // I don't think this is necessary, but just in case.
-            maxerr = 0.0;
+            set_err_to_0(&maxerr);
           }
         }
       } // End special/initial testing      
@@ -1299,10 +1316,7 @@ check (int q, char *expectedResidue)
 	  else
 	    error_flag = 0;
 
-	  terr = lucas_square (x, n, j, last, (float) maxerr, 1);
-	  
-	  if( terr > maxerr ) 
-	    maxerr = terr;
+	  terr = lucas_square (x, n, j, last, &maxerr, error_flag);
 		
 	  if (error_flag)
 	    {
@@ -1354,7 +1368,7 @@ check (int q, char *expectedResidue)
 	      print_time_from_seconds (diff);
 	      printf (")\n");
 	      fflush (stdout);
-	      maxerr = 0.0; // Instead of tracking maxerr over whole run, reset it at each checkpoint.
+	      set_err_to_0(&maxerr); // Instead of tracking maxerr over whole run, reset it at each checkpoint.
 	      gettimeofday (&time0, NULL);
 	      if (expectedResidue) 
 	      {
@@ -1374,44 +1388,24 @@ check (int q, char *expectedResidue)
 	      cutilSafeCall (cudaMemcpy
 			     (x, g_x, sizeof (double) * n,
 			      cudaMemcpyDeviceToHost));
-	      write_checkpoint (x, q, n, j + 1, total_time >= 0 ? total_time+(time1.tv_sec - start_time) : -1 );
-	      if (quitting == 1)
+	      if( total_time >= 0 )
+	        total_time += (time1.tv_sec - start_time);
+	      write_checkpoint (x, q, n, j + 1, total_time);
+	      if (quitting == 1) {
+	        if(total_time >= 0) {
+	          printf(" Estimated time spent so far: ");
+	          print_time_from_seconds(total_time);
+	          printf("."); 
+	        }
+	        printf("\n\n");
 		j = last + 1;
+	      }
 	    }
 
-	  if (k_f && !quitting && !expectedResidue && (!(j & 15))
-	      && _kbhit ())
-	    {
-	      int c = getchar ();
-	      if (c == 'p')
-		if (polite_f)
-		  {
-		    polite_f = 0;
-		    printf ("   -polite 0\n");
-		  }
-		else
-		  {
-		    polite_f = 1;
-		    printf ("   -polite %d\n", polite);
-		  }
-	      if (c == 't')
-		{
-		  t_f = 0;
-		  printf ("   disabling -t\n");
-		}
-	      if (c == 's')
-		if (s_f == 1)
-		  {
-		    s_f = 2;
-		    printf ("   disabling -s\n");
-		  }
-		else if (s_f == 2)
-		  {
-		    s_f = 1;
-		    printf ("   enabling -s\n");
-		  }
-	      fflush (stdin);
-	    }
+	  if ( k_f && !quitting && !expectedResidue && (!(j & 15)) && _kbhit() )
+	    interact();
+	  
+	  fflush (stdout);	    
 	} /* end main LL for-loop */
       if (!restarting && !expectedResidue && !quitting)
 	{
@@ -1421,14 +1415,12 @@ check (int q, char *expectedResidue)
 	    fprintf (stderr, "Cannot write results to %s\n\n", RESULTSFILE);
 	    exit (1);
 	  }
+	  printbits (x, q, n, b, c, high, low, 64, fp, 0);
 	  if( total_time >= 0 ) { /* Only print time if we don't have an old checkpoint file */
-	    total_time += time1.tv_sec - start_time;
-	    printbits (x, q, n, b, c, high, low, 64, fp, 0);
+	    total_time += (time1.tv_sec - start_time);
 	    printf (". Estimated total time: ");
-	    print_time_from_seconds( total_time );
-	    printf (" .\n");
-	  } else {
-	    printbits (x, q, n, b, c, high, low, 64, fp, 0);
+	    print_time_from_seconds(total_time);
+	    printf (".");
 	  }
 	  
 	  if( AID[0] && strncasecmp(AID, "N/A", 3) ) { // If (AID is not null), AND (AID is NOT "N/A") (case insensitive)
@@ -1454,20 +1446,20 @@ int main (int argc, char *argv[])
 { 
   printf("\n");
   quitting = 0;
-
-/*! Old default settings; kept here just in case.
-  sprintf (input_filename, "");
-  checkpoint_iter = 10000;
-  threads = 256;
-  fftlen = 0;
-  quitting = 0;
-  s_f = t_f = r_f = d_f = k_f = 0;
-  polite_f = polite = 1; 
-*/
+#define THREADS_DFLT 256
+#define CHECKPOINT_ITER_DFLT 10000
+#define SAVE_FOLDER_DFLT "savefiles"
+#define S_F_DFLT 0
+#define T_F_DFLT 0
+#define K_F_DFLT 0
+#define D_F_DFLT 0
+#define POLITE_DFLT 1
+#define WORKFILE_DFLT "worktodo.txt"
+#define RESULTSFILE_DFLT "results.txt"
   
   /* "Production" opts to be read in from command line or ini file */
   int q = -1;
-  int device_number = -1, l_f = 0;
+  int device_number = -1, f_f = 0;
   checkpoint_iter = -1;
   threads = -1;
   fftlen = -1;
@@ -1486,49 +1478,49 @@ int main (int argc, char *argv[])
   
   if (file_exists(INIFILE))
   {  
-   if( checkpoint_iter < 1 && 		!IniGetInt(INIFILE, "CheckpointIterations", &checkpoint_iter, 10000) )
-    fprintf(stderr, "Warning: Couldn't parse ini file option CheckpointIterations; using default: 10000\n");
-   if( threads < 1 && 			!IniGetInt(INIFILE, "Threads", &threads, 256) )
-    fprintf(stderr, "Warning: Couldn't parse ini file option Threads; using default: 256\n");
-   if( s_f < 0 && 			!IniGetInt(INIFILE, "SaveAllCheckpoints", &s_f, 0) )
-    fprintf(stderr, "Warning: Couldn't parse ini file option SaveAllCheckpoints; using default: off\n");
-   if( 		     	     s_f > 0 && !IniGetStr(INIFILE, "SaveFolder", folder, "savefiles") )
-    fprintf(stderr, "Warning: Couldn't parse ini file option SaveFolder; using default: \"savefiles\"\n");
+   if( checkpoint_iter < 1 && 		!IniGetInt(INIFILE, "CheckpointIterations", &checkpoint_iter, CHECKPOINT_ITER_DFLT) )
+    /*fprintf(stderr, "Warning: Couldn't parse ini file option CheckpointIterations; using default: %d\n", CHECKPOINT_ITER_DFLT)*/;
+   if( threads < 1 && 			!IniGetInt(INIFILE, "Threads", &threads, THREADS_DFLT) )
+    fprintf(stderr, "Warning: Couldn't parse ini file option Threads; using default: %d\n", THREADS_DFLT);
+   if( s_f < 0 && 			!IniGetInt(INIFILE, "SaveAllCheckpoints", &s_f, S_F_DFLT) )
+    /*fprintf(stderr, "Warning: Couldn't parse ini file option SaveAllCheckpoints; using default: off\n")*/;
+   if( 		     	     s_f > 0 && !IniGetStr(INIFILE, "SaveFolder", folder, SAVE_FOLDER_DFLT) )
+    /*fprintf(stderr, "Warning: Couldn't parse ini file option SaveFolder; using default: \"%s\"\n", SAVE_FOLDER_DFLT)*/;
    if( t_f < 0 && 			!IniGetInt(INIFILE, "CheckRoundoffAllIterations", &t_f, 0) )
     fprintf(stderr, "Warning: Couldn't parse ini file option CheckRoundoffAllIterations; using default: off\n");
-   if( polite < 0 && 			!IniGetInt(INIFILE, "Polite", &polite, 1) )
-    fprintf(stderr, "Warning: Couldn't parse ini file option Polite; using default: 1\n");
+   if( polite < 0 && 			!IniGetInt(INIFILE, "Polite", &polite, POLITE_DFLT) )
+    fprintf(stderr, "Warning: Couldn't parse ini file option Polite; using default: %d\n", POLITE_DFLT);
    if( k_f < 0 && 			!IniGetInt(INIFILE, "Interactive", &k_f, 0) )
-    fprintf(stderr, "Warning: Couldn't parse ini file option Interactive; using default: off\n");
+    /*fprintf(stderr, "Warning: Couldn't parse ini file option Interactive; using default: off\n")*/;
    if( device_number < 0 &&		!IniGetInt(INIFILE, "DeviceNumber", &device_number, 0) )
     fprintf(stderr, "Warning: Couldn't parse ini file option DeviceNumber; using default: 0\n");
-   if( d_f < 0 &&			!IniGetInt(INIFILE, "PrintDeviceInfo", &d_f, 0) )
-    fprintf(stderr, "Warning: Couldn't parse ini file option PrintDeviceInfo; using default: off\n");
-   if( !input_filename[0] &&		!IniGetStr(INIFILE, "WorkFile", input_filename, "worktodo.txt") )
-    fprintf(stderr, "Warning: Couldn't parse ini file option WorkFile; using default \"worktodo.txt\"\n");
+   if( d_f < 0 &&			!IniGetInt(INIFILE, "PrintDeviceInfo", &d_f, D_F_DFLT) )
+    /*fprintf(stderr, "Warning: Couldn't parse ini file option PrintDeviceInfo; using default: off\n")*/;
+   if( !input_filename[0] &&		!IniGetStr(INIFILE, "WorkFile", input_filename, WORKFILE_DFLT) )
+    fprintf(stderr, "Warning: Couldn't parse ini file option WorkFile; using default \"%s\"\n", WORKFILE_DFLT);
     /* I've readded the warnings about worktodo and results due to the planned multiple-instances-in-one-dir feature. */
-   if( !RESULTSFILE[0] && 		!IniGetStr(INIFILE, "ResultsFile", RESULTSFILE, "results.txt") )
-    fprintf(stderr, "Warning: Couldn't parse ini file option ResultsFile; using default \"results.txt\"\n");
+   if( !RESULTSFILE[0] && 		!IniGetStr(INIFILE, "ResultsFile", RESULTSFILE, RESULTSFILE_DFLT) )
+    fprintf(stderr, "Warning: Couldn't parse ini file option ResultsFile; using default \"%s\"\n", RESULTSFILE_DFLT);
    if( fftlen < 0 && 			!IniGetStr(INIFILE, "FFTLength", fft_str, "\0") )
-    fprintf(stderr, "Warning: Couldn't parse ini file option FFTLength; using autoselect.\n");
+    /*fprintf(stderr, "Warning: Couldn't parse ini file option FFTLength; using autoselect.\n")*/;
   }
   else // no ini file
     {
       fprintf(stderr, "Warning: Couldn't find .ini file. Using defaults for non-specified options.\n");
-      if( checkpoint_iter < 1 ) checkpoint_iter = 10000;
-      if( threads < 1 ) threads = 256;
+      if( checkpoint_iter < 1 ) checkpoint_iter = CHECKPOINT_ITER_DFLT;
+      if( threads < 1 ) threads = THREADS_DFLT;
       if( fftlen < 0 ) fftlen = 0;
-      if( s_f < 0 ) s_f = 0;
-      if( t_f < 0 ) t_f = 0;
-      if( k_f < 0 ) k_f = 0;
+      if( s_f < 0 ) s_f = S_F_DFLT;
+      if( t_f < 0 ) t_f = T_F_DFLT;
+      if( k_f < 0 ) k_f = K_F_DFLT;
       if( device_number < 0 ) device_number = 0;
-      if( d_f < 0 ) d_f = 0;
-      if( polite < 0 ) polite = 1;
-      if( !input_filename[0] ) sprintf(input_filename, "worktodo.txt");
-      if( !RESULTSFILE[0] ) sprintf(RESULTSFILE, "results.txt");
+      if( d_f < 0 ) d_f = D_F_DFLT;
+      if( polite < 0 ) polite = POLITE_DFLT;
+      if( !input_filename[0] ) sprintf(input_filename, WORKFILE_DFLT);
+      if( !RESULTSFILE[0] ) sprintf(RESULTSFILE, RESULTSFILE_DFLT);
   }
   
-  if( fftlen < 0 ) { // Only possible if not on command line and not in ini file 
+  if( fftlen < 0 ) { // possible if -f not on command line
       fftlen = fft_from_str(fft_str);
   }
   if (polite == 0) {
@@ -1544,8 +1536,7 @@ int main (int argc, char *argv[])
     fprintf(stderr, "Threads must be 2^k, 5 <= k <= 10.\n\n");
     exit(2);
   }
-  if( fftlen > 0 ) // if the user has given an override...
-    l_f = fftlen;  // then note this length must be kept between tests
+  f_f = fftlen; // if the user has given an override... then note this length must be kept between tests
     
   
   init_device (device_number);
@@ -1609,10 +1600,8 @@ int main (int argc, char *argv[])
 	#endif
 	do { // while(!quitting)
 	
-	  if( l_f > 0 )    // This is necessary; if the user gave an fftlen override (-f or ini file)... 
-	    fftlen = l_f;  // ...then we must remember it, 
-	  else             // ...or... 
-	    fftlen = 0;    // ...we need to reset fftlen if it was written to by the work file 
+	                 
+	  fftlen = f_f; // fftlen can be changed for each test, so be sure to reset it
 	                   
   	  error = get_next_assignment(input_filename, &q, &fftlen, &AID);
   	  /* Guaranteed to write to fftlen ONLY if specified on workfile line, so that if unspecified, the pre-set
@@ -1631,14 +1620,14 @@ int main (int argc, char *argv[])
 	    }
 	    
 	} while(!quitting);  
-    } else // Exponent passed in as argument
+      } else // Exponent passed in as argument
 	{
 	  if (!valid_assignment(q, fftlen)) {printf("\n");} //! v_a prints warning
 	  else
 	    check (q, 0);
 	}
-    } // if(-r) else if(-cufft) else(workfile) }
-}
+    } // end if(-r) else if(-cufft) else(workfile)
+} // end main()
 
 void parse_args(int argc, char *argv[], int* q, int* device_number, 
 		int* cufftbench_s, int* cufftbench_e, int* cufftbench_d)
@@ -1833,4 +1822,37 @@ while (argc > 1)
 	  argc--;
 	}
     }
+}
+
+void interact(void)
+{
+  int c = getchar ();
+  if (c == 'p')
+    if (polite_f)
+	  {
+	    polite_f = 0;
+	    printf ("   -polite 0\n");
+	  }
+    else
+     {
+      polite_f = 1;
+      printf ("   -polite %d\n", polite);
+     }
+  else if (c == 't')
+    {
+      t_f = 0;
+      printf ("   disabling -t\n");
+    }
+  else if (c == 's')
+    if (s_f == 1)
+      {
+        s_f = 2;
+        printf ("   disabling -s\n");
+      }
+    else if (s_f == 2)
+      {
+        s_f = 1;
+        printf ("   enabling -s\n");
+      }
+  fflush (stdin);
 }

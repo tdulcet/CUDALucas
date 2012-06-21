@@ -26,18 +26,16 @@ New in 2.04:
      proceed accordingly. (Should it be printed to the results file?)
      
    - The "err = " prints the maximum error since the last checkpoint, as opposed
-     to the maximum error since the last restart. (This may or may not actually
-     be the case, I need msft's help here.)
+     to the maximum error since the last restart.
+     There was a slight change to how maximum error is handled.
      
    - Now prints AID into results file, in a format that PrimeNet will
-     understand. (Thanks James!)
+     understand. (Thanks James!) (Unfortunately, it seems that PrimeNet doesn't
+     actually do anyhting with that AID.)
      
-   - The first 1000 iterations now use -t regardless, and also calculate average
+   - The first 1000 iterations now use extra error checking, and also calculate average
      error. If average error >= 0.25, then the test will be restarted with a 
      longer FFT length.
      
    - FFT selection should be somewhat better now, though not almost-perfect like
-     Prime95. I did get a table of lengths from Prime95's code.
-     
-   - Changed the error transfer code so that it's more transparent but still 
-     functionally the same as before. msft should examine this closely.
+     Prime95. I did get a table of lengths from Prime95's tables.
