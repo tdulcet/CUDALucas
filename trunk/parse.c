@@ -438,7 +438,8 @@ output
     ptr = 1 + ptr_end; // Reset for the next field (*ptr == '\n' || *ptr == comment-delimiter when we're done)
   } // end outer for()
   // now we've looped over all fields in worktodo line
-  ptr = ptr_end; //MSVS says this 'ptr_end' is potentially uninitialized
+  ptr = ptr_end; //1 MSVS says this 'ptr_end' is potentially uninitialized
+  		 //2 Well MSVS is wrong :P (it's understandable, it's difficult to determine)
   #ifdef EBUG
   printf("    Left for()\n");
   #endif
@@ -739,7 +740,7 @@ typedef struct _lockinfo
 static unsigned int num_locked_files = 0;
 static lockinfo     locked_files[MAX_LOCKED_FILES];
 
-FILE *fopen_and_lock(char *path, const char *mode)
+FILE *fopen_and_lock(const char *path, const char *mode)
 {
   unsigned int i;
   int lockfd;
