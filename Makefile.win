@@ -1,6 +1,6 @@
 VER =2.04 Beta
-CUDA_VERSION = 3.2
-CUDA_ARCH = sm_13
+CUDA_VERSION = 4.0
+CUDA_ARCH = sm_20
 BIT = x64
 NAME = CUDALucas-$(VER)-$(CUDA_VERSION)-$(CUDA_ARCH)-$(BIT).exe
 OUT = $(NAME)
@@ -14,7 +14,7 @@ else
 endif
 CCLOC = "$(VCLOC)\VC\bin\amd64"
 
-CUFLAGS = -m64 --ptxas-options=-v -ccbin=$(CCLOC) -D$(BIT) -Xcompiler /EHsc,/W3,/nologo,/Ox,/Oy,/GL -arch=$(CUDA_ARCH) -D__x86_64__ -O3
+CUFLAGS = -m64 --ptxas-options=-v -ccbin=$(CCLOC) -Xcompiler /EHsc,/W3,/nologo,/Ox,/Oy,/GL -arch=$(CUDA_ARCH) -O3
 
 CC = $(CCLOC)\cl
 CFLAGS = /Ox /Oy /GL /W4 /fp:fast /nologo
