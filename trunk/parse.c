@@ -106,7 +106,7 @@ mfaktc 0.07-0.14 to see Luigis code.
     if(err) return NULL;
     else return stream;
   }
-  void _sprintf(char* buf, char* frmt, char* string)
+  void _sprintf(char* buf, char* frmt, const char* string)
   { // only used in filelocking code
 	  sprintf_s(buf, 251, frmt, string);
   }
