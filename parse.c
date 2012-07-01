@@ -119,7 +119,7 @@ mfaktc 0.07-0.14 to see Luigis code.
 		 close (file_handle);
 		 return -1;
 	 }
-	 else return 0;
+	 else return file_handle;
   }
   void _strcpy(char *dest, const char *src)
   {
