@@ -1438,7 +1438,7 @@ int check (int q, char *expectedResidue)
 	    print_time_from_seconds(total_time);
 	  }
 	  
-	  if( AID[0] && strncasecmp(AID, "N/A", 3) ) { // If (AID is not null), AND (AID is NOT "N/A") (case insensitive)
+	  if( AID[0] && strncasecmp(AID, "N/A", 3) ) { // If (AID is NOT empty), AND (AID is NOT "N/A") (case insensitive)
 	    fprintf(fp, ", AID: %s\n", AID);
 	  } else {
 	    fprintf(fp, "\n");
@@ -1480,7 +1480,7 @@ int main (int argc, char *argv[])
   fftlen = -1;
   s_f = t_f = d_f = k_f = -1;
   polite_f = polite = -1;
-  input_filename[0] = RESULTSFILE[0] = 0; /* First character is null terminator */
+  AID[0] = input_filename[0] = RESULTSFILE[0] = 0; /* First character is null terminator */
   char fft_str[132] = "\0";
   
   /* Non-"production" opts */
@@ -1614,13 +1614,12 @@ int main (int argc, char *argv[])
 	printf("Processed INI file and console arguments correctly; about to call get_next_assignment().\n");
 	#endif
 	do { // while(!quitting)
-	
-	                 
-	  fftlen = f_f; // fftlen can be changed for each test, so be sure to reset it
+	      
+	  fftlen = f_f; // fftlen and AID change between tests, so be sure to reset them
+	  AID[0] = 0;
 	                   
   	  error = get_next_assignment(input_filename, &q, &fftlen, &AID);
-  	  /* Guaranteed to write to fftlen ONLY if specified on workfile line, so that if unspecified, the pre-set
-  	  default is kept. */
+  	  /* Guaranteed to write to fftlen ONLY if specified on workfile line, so that if unspecified, the pre-set default is kept. */
 	  if( error ) exit (2); // get_next_assignment prints warning message	  
 	  #ifdef EBUG
 	  printf("Gotten assignment, about to call check().\n");
