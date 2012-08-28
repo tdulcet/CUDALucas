@@ -32,7 +32,7 @@ char program[] = "CUDALucas v2.04 Beta";
 #include "parse.h"
 
 #ifdef _MSC_VER
-#define strncasecmp _strnicmp
+#define strncasecmp strnicmp // _strnicmp
 #endif
 
 /* In order to have the gettimeofday() function, you need these includes on Linux:
@@ -713,24 +713,22 @@ extra paramter that we can adjust on the fly. In check(), index starts as -1,
 the default. In that case, choose from the table. If index >= 0, we must assume
 it's an override index and return the corresponding length. If index > table-count,
 then we assume it's a manual fftlen and return the proper index. */
-  #define COUNT 119
-  int multipliers[COUNT] = {  6,     8,    12,    16,    18,    24,    32,    
-                             40,    48,    64,    72,    80,    96,   120,   
-                            128,   144,   160,   192,   224,   240,   256,   
-                            288,   320,   336,   384,   448,   480,   512,   
-                            576,   640,   672,   768,   800,   864,   896,   
-                            960,  1024,  1120,  1152,  1200,  1280,  1344,
-                           1440,  1536,  1600,  1680,  1728,  1792,  1920, 
-                           2048,  2240,  2304,  2400,  2560,  2688,  2880,  
-                           3072,  3200,  3360,  3456,  3584,  3840,  4000,  
-                           4096,  4480,  4608,  4800,  5120,  5376,  5600,  
-                           5760,  6144,  6400,  6720,  6912,  7168,  7680,  
-                           8000,  8192,  8960,  9216,  9600, 10240, 10752, 
-                          11200, 11520, 12288, 12800, 13440, 13824, 14366, 
-                          15360, 16000, 16128, 16384, 17920, 18432, 19200, 
-                          20480, 21504, 22400, 23040, 24576, 25600, 26880, 
-                          29672, 30720, 32000, 32768, 34992, 36864, 38400, 
-                          40960, 46080, 49152, 51200, 55296, 61440, 65536   };
+  #define COUNT 89
+  int multipliers[COUNT] = {  6,     8,    12,    16,    18,    24, 
+                             32,    40,    48,    64,    72,    80, 
+                             96,   120,   128,   144,   160,   192, 
+                            240,   256,   288,   320,   384,   480, 
+                            512,   576,   640,   768,   864,   960, 
+                           1024,  1152,  1280,  1440,  1536,  1600, 
+                           1728,  1920,  2048,  2304,  2400,  2560,
+                           2880,  3072,  3200,  3456,  3840,  4000, 
+                           4096,  4608,  4800,  5120,  5760,  6144, 
+                           6400,  6912,  7680,  8000,  8192,  9216,
+                           9600, 10240, 11520, 12288, 12800, 13824, 
+                          15360, 16000, 16384, 18432, 19200, 20480, 
+                          23040, 24576, 25600, 27648, 30720, 32000, 
+                          32768, 34992, 36864, 38400, 40960, 46080,
+                          49152, 51200, 55296, 61440, 65536         };
   // Largely copied from Prime95's jump tables, up to 32M
   // Support up to 64M, the maximum length with threads == 1024
   if( 0 <= *index && *index < COUNT ) // override
@@ -1207,7 +1205,8 @@ void interact(void); // defined below everything else
  *      Main Function
  *
  **************************************************************/
-int check (int q, char *expectedResidue)
+int
+check (int q, char *expectedResidue)
 {
   int n, j = 1L, last = 2L, error_flag;
   int t_ff = t_f; t_f = 1; /* Override for round off test, deactivate before actual test */
@@ -1438,7 +1437,7 @@ int check (int q, char *expectedResidue)
 	    print_time_from_seconds(total_time);
 	  }
 	  
-	  if( AID[0] && strncasecmp(AID, "N/A", 3) ) { // If (AID is NOT empty), AND (AID is NOT "N/A") (case insensitive)
+	  if( AID[0] && strncasecmp(AID, "N/A", 3) ) { // If (AID is not null), AND (AID is NOT "N/A") (case insensitive)
 	    fprintf(fp, ", AID: %s\n", AID);
 	  } else {
 	    fprintf(fp, "\n");
@@ -1480,7 +1479,7 @@ int main (int argc, char *argv[])
   fftlen = -1;
   s_f = t_f = d_f = k_f = -1;
   polite_f = polite = -1;
-  AID[0] = input_filename[0] = RESULTSFILE[0] = 0; /* First character is null terminator */
+  input_filename[0] = RESULTSFILE[0] = 0; /* First character is null terminator */
   char fft_str[132] = "\0";
   
   /* Non-"production" opts */
@@ -1614,12 +1613,13 @@ int main (int argc, char *argv[])
 	printf("Processed INI file and console arguments correctly; about to call get_next_assignment().\n");
 	#endif
 	do { // while(!quitting)
-	      
-	  fftlen = f_f; // fftlen and AID change between tests, so be sure to reset them
-	  AID[0] = 0;
+	
+	                 
+	  fftlen = f_f; // fftlen can be changed for each test, so be sure to reset it
 	                   
   	  error = get_next_assignment(input_filename, &q, &fftlen, &AID);
-  	  /* Guaranteed to write to fftlen ONLY if specified on workfile line, so that if unspecified, the pre-set default is kept. */
+  	  /* Guaranteed to write to fftlen ONLY if specified on workfile line, so that if unspecified, the pre-set
+  	  default is kept. */
 	  if( error ) exit (2); // get_next_assignment prints warning message	  
 	  #ifdef EBUG
 	  printf("Gotten assignment, about to call check().\n");

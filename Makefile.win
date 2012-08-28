@@ -40,6 +40,7 @@ $(NAME): $(CUOBJS) $(OBJS)
 clean :
 	del $(OBJS)
 	del $(CUOBJS)
+	del *.o
 cleaner: clean
 	del "$(NAME)"
 	
