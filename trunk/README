@@ -8,15 +8,12 @@ A. There are various executables for both Windows and Linux, some text files,
 Q. I get errors about "lib cudart not found" or "lib cufft not found". What can
    I do?
 A. See section 3 of this document; you can download the files from SourceForge.
-   Unforunately at the moment we don't have the Windows library files 
-   available for all CUDA versions, currently only 3.2 and 4.1. You should choose
-   the appropriate executables.
 
 
 ####################
 # CUDALucas README #
 ####################
-CUDALucas v2.03
+CUDALucas v2.04 Beta
 
 Content
 
@@ -125,11 +122,11 @@ the Makefile.
 # 2.2 Compilation (Windows) #
 #############################
 
-I don't use Windows, however hopefully our Windows compiler man can fill this in
-with his experience. :) In the meantime, the included Makefile.win should get
-you off the ground.
-
-
+You will need to download make.exe (http://gnuwin32.sourceforge.net/packages/make.htm)
+Update the makefile.win with the version you want to compile. You should be able 
+to run 'make -f makefile.win' without modifications. If, when you installed
+the toolkit, you did not follow the nVidia defaults, you might need specify a 
+different CUDA Toolkit location in the makefile.win file.
 
 ##############################
 # 3 Running CUDALucas        #

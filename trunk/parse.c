@@ -69,9 +69,7 @@ mfaktc 0.07-0.14 to see Luigis code.
 #ifndef _MSC_VER /* See next comment */
   #define _fopen fopen
   #define strcopy strncpy
-  #define _strcpy strcpy
   #define _sprintf sprintf
-  #define open_s open
   #include <unistd.h>
   #include <sched.h>
   #define MODE S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH
@@ -85,8 +83,9 @@ mfaktc 0.07-0.14 to see Luigis code.
 #else
   #include <winsock2.h>
   #include <io.h>
-  #include <share.h> //used for _sopen_s
+  #undef open
   #undef close
+  #define open _open
   #define close _close
   #define sched_yield SwitchToThread
   #define MODE _S_IREAD | _S_IWRITE
@@ -94,7 +93,6 @@ mfaktc 0.07-0.14 to see Luigis code.
   
   /* Everything from here to the next include is to make MSVS happy. */
   #define sscanf sscanf_s /* This only works for scanning numbers, or strings with a defined length (e.g. "%131s") */
-  
   void strcopy(char* dest, char* src, size_t n) 
   {
     strncpy_s(dest, MAX_LINE_LENGTH+1, src, n);
@@ -110,22 +108,8 @@ mfaktc 0.07-0.14 to see Luigis code.
   { // only used in filelocking code
 	  sprintf_s(buf, 251, frmt, string);
   }
-  int open_s(const char *filename, int oflag, int pmode)
-  {
-	 int file_handle;
-	 errno_t err = _sopen_s( &file_handle, filename, oflag, _SH_DENYNO, pmode);
-	 if (err)
-	 {
-		 close (file_handle);
-		 return -1;
-	 }
-	 else return file_handle;
-  }
-  void _strcpy(char *dest, const char *src)
-  {
-	  strcpy_s (dest, _countof(dest), src);
-  }
-    int gettimeofday(struct timeval *tv, struct timezone *unused)
+  
+  int gettimeofday(struct timeval *tv, struct timezone *unused)
   /*
   This is based on a code sniplet from Kevin (kjaget on www.mersenneforum.org)
 
@@ -438,8 +422,7 @@ output
     ptr = 1 + ptr_end; // Reset for the next field (*ptr == '\n' || *ptr == comment-delimiter when we're done)
   } // end outer for()
   // now we've looped over all fields in worktodo line
-  ptr = ptr_end; //1 MSVS says this 'ptr_end' is potentially uninitialized
-  		 //2 Well MSVS is wrong :P (it's understandable, it's difficult to determine)
+  ptr = ptr_end;
   #ifdef EBUG
   printf("    Left for()\n");
   #endif
@@ -492,7 +475,7 @@ output
 enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, int* fft_length, LINE_BUFFER *key)
 {
   struct ASSIGNMENT assignment;
-  
+
   FILE *f_in;
   enum PARSE_WARNINGS value;
   char *tail;
@@ -502,7 +485,7 @@ enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, int* f
   #ifdef EBUG
   printf("Starting GNA. Called with *fft = %d.\n", *fft_length);
   #endif
-  
+
   assignment.fft_length = 0;
   f_in = _fopen(filename, "r");
   if(NULL == f_in)
@@ -761,11 +744,11 @@ FILE *fopen_and_lock(const char *path, const char *mode)
     return NULL;
   }
 
-  _sprintf( locked_files[num_locked_files].lock_filename, "%.250s.lck", path);
+  _sprintf(locked_files[num_locked_files].lock_filename, "%.250s.lck", path);
 
   for(i=0;;)
   {
-    if ((lockfd = open_s(locked_files[num_locked_files].lock_filename, O_EXCL | O_CREAT, MODE)) < 0)
+    if ((lockfd = open(locked_files[num_locked_files].lock_filename, O_EXCL | O_CREAT, MODE)) < 0)
     {
       if (errno == EEXIST)
       {
@@ -779,7 +762,7 @@ FILE *fopen_and_lock(const char *path, const char *mode)
         perror("Cannot open lockfile");
         break;
       }
-	}
+    }
     break;
   }
 
@@ -790,7 +773,7 @@ FILE *fopen_and_lock(const char *path, const char *mode)
     printf("Locked %.250s\n", path);
   }
 
-  f = _fopen(path, mode);
+  f=fopen(path, mode);
   if (f)
   {
     locked_files[num_locked_files++].open_file = f;
@@ -813,7 +796,7 @@ FILE *fopen_and_lock(const char *path, const char *mode)
 int unlock_and_fclose(FILE *f)
 {
   unsigned int i, j;
-  int ret = 0;
+  int ret;
   #ifdef EBUG
   printf("unlock() called\n");
   #endif
@@ -832,7 +815,7 @@ int unlock_and_fclose(FILE *f)
       {
         locked_files[j-1].lockfd = locked_files[j].lockfd;
         locked_files[j-1].open_file = locked_files[j].open_file;
-        _strcpy(locked_files[j-1].lock_filename, locked_files[j].lock_filename);
+        strcpy(locked_files[j-1].lock_filename, locked_files[j].lock_filename);
       }
       num_locked_files--;
       break;
