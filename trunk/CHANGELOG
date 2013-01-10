@@ -1,3 +1,9 @@
+New in 2.05:
+   - MersenneForum user owftheevil implemented the bitshift for FFTs (thank you!!)
+   
+   - He was also kind enough to implement restarting from previous checkpoint with
+     a larger FFT in the case of errors
+
 I've been forgetting what I've changed :P
 
 New in 2.04:

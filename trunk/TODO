@@ -6,3 +6,4 @@
 9. Add option to not print residues at checkpoints? Option to skip extra initial error checking?
 11. Extend the self test to include a lot more expos to test all FFT lengths, as well as near crossovers.
 11a. Get a better idea of where crossovers are necessary.
+14. Add more FFT lengths
