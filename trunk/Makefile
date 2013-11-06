@@ -1,5 +1,5 @@
 NAME = CUDALucas
-VERSION = 2.04 Beta
+VERSION = 2.05 Beta
 OptLevel = 3
 OUT = $(NAME)
 CUDA = /usr/local/cuda
@@ -7,7 +7,7 @@ CUDA = /usr/local/cuda
 CUC = $(CUDA)/bin/nvcc
 CULIB = $(CUDA)/lib64
 CUINC = $(CUDA)/include
-CUFLAGS = -O$(OptLevel) -arch=sm_13 --compiler-options=-Wall -I$(CUINC)
+CUFLAGS = -O$(OptLevel) --generate-code arch=compute_13,code=sm_13 --generate-code arch=compute_20,code=sm_20 --generate-code arch=compute_30,code=sm_30 --generate-code arch=compute_35,code=sm_35 --compiler-options=-Wall -I$(CUINC)
 
 # The nVidia CUDA Toolkit will provide both nvcc and the CUDA libraries. If you
 # follow their defaults, the necessary files will be installed in your PATH and
@@ -21,14 +21,14 @@ LDFLAGS = $(CFLAGS) -fPIC -L$(CULIB) $(L)
 
 $(NAME): CUDALucas.o parse.o
 	$(CC) $^ $(LDFLAGS) -o $(OUT)
-	
+
 CUDALucas.o: CUDALucas.cu parse.h cuda_safecalls.h
 	$(CUC) $(CUFLAGS) -c $<
 
 parse.o: parse.c
 	$(CC) $(CFLAGS) -c $<
 
-clean: 
+clean:
 	rm -f *.o
 cleaner:
 	rm -f $(NAME) debug_$(NAME) test_$(NAME)

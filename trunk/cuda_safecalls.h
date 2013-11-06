@@ -25,6 +25,7 @@ inline cudaError cutilDeviceReset()
 // The advantage is the developers gets to use the inline function so they can debug
 #define cutilSafeCallNoSync(err)     __cudaSafeCallNoSync(err, __FILE__, __LINE__)
 #define cutilSafeCall(err)           __cudaSafeCall      (err, __FILE__, __LINE__)
+#define cutilSafeCall1(err,iter)     __cudaSafeCall1      (err, __FILE__, __LINE__,iter)
 #define cutilSafeThreadSync()        __cudaSafeThreadSync(__FILE__, __LINE__)
 #define cufftSafeCall(err)           __cufftSafeCall     (err, __FILE__, __LINE__)
 
@@ -39,10 +40,18 @@ inline void __cudaSafeCallNoSync( cudaError err, const char *file, const int lin
 	}
 }
 
-inline void __cudaSafeCall( cudaError err, const char *file, const int line ) {
+inline void __cudaSafeCall( cudaError err, const char *file, const int line) {
 	if( cudaSuccess != err) {
 		fprintf(stderr, "%s(%i) : cudaSafeCall() Runtime API error %d: %s.\n",
-				file, line, (int)err, cudaGetErrorString( err ) );
+				file, line, (int)err, cudaGetErrorString( err ));
+		exit(-1);
+	}
+}
+
+inline void __cudaSafeCall1( cudaError err, const char *file, const int line , int iter) {
+	if( cudaSuccess != err) {
+		fprintf(stderr, "%s(%i) : cudaSafeCall() Runtime API error %d: %s, iteration %d.\n",
+				file, line, (int)err, cudaGetErrorString( err ) ,iter);
 		exit(-1);
 	}
 }
@@ -57,20 +66,20 @@ inline void __cudaSafeThreadSync( const char *file, const int line ) {
 }
 
 #ifdef _CUFFT_H_
-inline void __cufftSafeCall( cufftResult err, const char *file, const int line ) {
+inline void __cufftSafeCall( cufftResult err, const char *file, const int line) {
 	if( CUFFT_SUCCESS != err) {
 		fprintf(stderr, "%s(%i) : cufftSafeCall() CUFFT error %d: ",
 				file, line, (int)err);
 		switch (err) {
-			case CUFFT_INVALID_PLAN:   fprintf(stderr, "CUFFT_INVALID_PLAN\n"); break;
-			case CUFFT_ALLOC_FAILED:   fprintf(stderr, "CUFFT_ALLOC_FAILED\n"); break;
-			case CUFFT_INVALID_TYPE:   fprintf(stderr, "CUFFT_INVALID_TYPE\n"); break;
-			case CUFFT_INVALID_VALUE:  fprintf(stderr, "CUFFT_INVALID_VALUE\n"); break;
-			case CUFFT_INTERNAL_ERROR: fprintf(stderr, "CUFFT_INTERNAL_ERROR\n"); break;
-			case CUFFT_EXEC_FAILED:    fprintf(stderr, "CUFFT_EXEC_FAILED\n"); break;
-			case CUFFT_SETUP_FAILED:   fprintf(stderr, "CUFFT_SETUP_FAILED\n"); break;
-			case CUFFT_INVALID_SIZE:   fprintf(stderr, "CUFFT_INVALID_SIZE\n"); break;
-			case CUFFT_UNALIGNED_DATA: fprintf(stderr, "CUFFT_UNALIGNED_DATA\n"); break;
+			case CUFFT_INVALID_PLAN:   fprintf(stderr, "CUFFT_INVALID_PLAN"); break;
+			case CUFFT_ALLOC_FAILED:   fprintf(stderr, "CUFFT_ALLOC_FAILED"); break;
+			case CUFFT_INVALID_TYPE:   fprintf(stderr, "CUFFT_INVALID_TYPE"); break;
+			case CUFFT_INVALID_VALUE:  fprintf(stderr, "CUFFT_INVALID_VALUE"); break;
+			case CUFFT_INTERNAL_ERROR: fprintf(stderr, "CUFFT_INTERNAL_ERROR"); break;
+			case CUFFT_EXEC_FAILED:    fprintf(stderr, "CUFFT_EXEC_FAILED"); break;
+			case CUFFT_SETUP_FAILED:   fprintf(stderr, "CUFFT_SETUP_FAILED"); break;
+			case CUFFT_INVALID_SIZE:   fprintf(stderr, "CUFFT_INVALID_SIZE"); break;
+			case CUFFT_UNALIGNED_DATA: fprintf(stderr, "CUFFT_UNALIGNED_DATA"); break;
 			default: fprintf(stderr, "CUFFT Unknown error code\n");
 		}
 		exit(-1);
