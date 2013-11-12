@@ -1,55 +1,59 @@
-VER =2.04 Beta
-CUDA_VERSION = 4.2
-CUDA_ARCH = sm_30
+VER = 2.05-Beta
 BIT = x64
-NAME = CUDALucas-$(VER)-$(CUDA_VERSION)-$(CUDA_ARCH)-$(BIT).exe
+NAME = CUDALucas-$(VER)-$(BIT).exe
 OUT = $(NAME)
+CUDA_VERSION = 5.5
 
 CUDA = C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v$(CUDA_VERSION)
-LIBS = "$(CUDA)/lib/$(BIT)/cudart.lib" "$(CUDA)/lib/$(BIT)/cufft.lib"
-ifeq ($(CUDA_VERSION),3.2)
-	VCLOC = C:\Program Files (x86)\Microsoft Visual Studio 9.0
-else
-	VCLOC = C:\Program Files (x86)\Microsoft Visual Studio 10.0
-endif
-CCLOC = "$(VCLOC)\VC\bin\amd64"
+VCLOC = C:\Program Files (x86)\Microsoft Visual Studio 11.0
 
-CUFLAGS = -m64 --ptxas-options=-v -ccbin=$(CCLOC) -Xcompiler /EHsc,/W3,/nologo,/Ox,/Oy,/GL -arch=$(CUDA_ARCH) -O3
+CCLOC = "$(VCLOC)\VC\bin\amd64"
 
 CC = $(CCLOC)\cl
 CFLAGS = /Ox /Oy /GL /W4 /fp:fast /nologo
 
+NVCCFLAGS = -m64 --generate-code arch=compute_13,code=sm_13 --generate-code arch=compute_20,code=sm_20 --generate-code arch=compute_30,code=sm_30 --generate-code arch=compute_35,code=sm_35 --ptxas-options=-v
+CUFLAGS = -ccbin=$(CCLOC) -DWIN64 -Xcompiler /EHsc,/W3,/nologo,/Ox,/GL $(NVCCFLAGS)
+
 LINK = $(CCLOC)\link
 LFLAGS = /nologo /LTCG #/ltcg:pgo
 
-CUSRC = CUDALucas.cu
 SRC = parse.c
+CUSRC = CUDALucas.cu
 
-CUOBJS = $(CUSRC:.cu=.cuda$(CUDA_VERSION).$(CUDA_ARCH).$(BIT).obj)
+CUOBJS = $(CUSRC:.cu=.cuda$(CUDA_VERSION).$(BIT).obj)
 OBJS= $(SRC:.c=.$(BIT).obj)
 
-$(NAME): $(CUOBJS) $(OBJS)
-	$(LINK) $(LFLAGS) $^ $(LIBS) /out:"$(OUT)"
+LIBS = "$(CUDA)/lib/$(BIT)/cudart.lib" "$(CUDA)/lib/$(BIT)/cufft.lib"
 
-%.cuda$(CUDA_VERSION).$(CUDA_ARCH).$(BIT).obj: %.cu
+#########################################################################################
+
+all : ..\$(NAME)
+
+..\$(NAME) : $(CUOBJS) $(OBJS)
+	$(LINK) $(LFLAGS) $^ $(LIBS) /out:..\$(OUT)
+
+%.cuda$(CUDA_VERSION).$(BIT).obj: %.cu
 	"$(CUDA)/bin/nvcc" -c $< -o $@ $(CUFLAGS)
 
 %.$(BIT).obj : %.c
 	$(CC) $(CFLAGS) /c $< /Fo$@
+
+#########################################################################################
 
 clean :
 	del $(OBJS)
 	del $(CUOBJS)
 	del *.o
 cleaner: clean
-	del "$(NAME)"
+	del ..\$(NAME)
 	
 debug: CFLAGS += /DEBUG	
 debug: CUFLAGS += -DEBUG
 debug: OUT = debug_$(NAME)
-debug: $(NAME)
+debug: ..\$(NAME)
 
 test: CFLAGS += /DTEST
 test: CUFLAGS += -DTEST
 test: OUT = test_$(NAME)
-test: $(NAME)
+test: ..\$(NAME)
