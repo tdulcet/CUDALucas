@@ -212,7 +212,7 @@ __global__ void norm1 (double *g_in,
     mask[0] = -1 << numbits[0];
     mask[1] = -1 << numbits[1];
     if(ferr[0] < ferr[1]) ferr[0] = ferr[1];
-    if (ferr[0] > maxerr) atomicMax((int*) g_err, __float_as_int(ferr[0]));
+    if(ferr[0] > maxerr) atomicMax((int*) g_err, __float_as_int(ferr[0]));
   }
   if(index == digit) bigint[0] -= bit;
   if((index + 1) == digit) bigint[1] -= bit;
@@ -1821,8 +1821,8 @@ int main (int argc, char *argv[])
     /*fprintf(stderr, "Warning: Couldn't parse ini file option SaveAllCheckpoints; using default: off\n")*/;
    if( 		     	     s_f > 0 && !IniGetStr(INIFILE, "SaveFolder", folder, SAVE_FOLDER_DFLT) )
     /*fprintf(stderr, "Warning: Couldn't parse ini file option SaveFolder; using default: \"%s\"\n", SAVE_FOLDER_DFLT)*/;
-   if( t_f < 0 && 			!IniGetInt(INIFILE, "CheckRoundoffAllIterations", &t_f, 0) )
-    fprintf(stderr, "Warning: Couldn't parse ini file option CheckRoundoffAllIterations; using default: off\n");
+   /*if( t_f < 0 && 			!IniGetInt(INIFILE, "CheckRoundoffAllIterations", &t_f, 0) )
+    fprintf(stderr, "Warning: Couldn't parse ini file option CheckRoundoffAllIterations; using default: off\n");*/
    if( polite < 0 && 			!IniGetInt(INIFILE, "Polite", &polite, POLITE_DFLT) )
     fprintf(stderr, "Warning: Couldn't parse ini file option Polite; using default: %d\n", POLITE_DFLT);
    if( k_f < 0 && 			!IniGetInt(INIFILE, "Interactive", &k_f, 0) )
