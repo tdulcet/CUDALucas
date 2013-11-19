@@ -1142,7 +1142,7 @@ int *init_lucas_packed_int(unsigned * x_packed, int q , int *n, int *j, int *off
     fprintf (stderr, "fft length %d must be divisible by 4 * mult threads %d\n", *n, threads[1]);
      return NULL;
   }
-  if(  *n > 1024 * (2.5 * 0.0000358738168878758 * exp (1.0219834608 * log ((double) q))))
+  if(*n > 1024 * (2.5 * 0.0000358738168878758 * exp (1.0219834608 * log ((double) q))))
   {
     fprintf (stderr, "The fft length %dK is too large for the exponent %d. Restart with smaller fft.\n", *n / 1024, q);
     return NULL;
@@ -1312,6 +1312,7 @@ void memtest(int size, int iter, int device)
   timeval time0, time1;
   long long diff1;
   long long diff2;
+  long long ttime = 0;
   double total_bytes;
 
   printf("\nInitializing memory test using %0.0fMB of memory on device %d\n", n / 1024.0 * size / 1024.0 * 8.0, device);
@@ -1371,10 +1372,11 @@ void memtest(int size, int iter, int device)
           percent_done = iterations_done * 100 / (float) total_iterations;
           gettimeofday (&time1, NULL);
           diff1 = 1000000 * (time1.tv_sec - time0.tv_sec) + time1.tv_usec - time0.tv_usec;
+          ttime += diff1;
           time0 = time1;
-          diff2 = diff1 * (total_iterations - iterations_done) / 1000000;
-          total_bytes = 8 * n / (double) diff1 * 1000000 * 10000 / 1024 /1024 /1024;
-          printf("Position %d, Data Type %d, Iteration %d, Errors: %d, completed %2.2f%%, Read %0.2fGB/s, Write %0.2fGB/s, ETA ", j, i, iterations_done * 10000, total, percent_done, 3 * total_bytes, total_bytes);
+          diff2 = (long long) (ttime  * (total_iterations / (double) iterations_done - 1)/ 1000000);
+          total_bytes = 244140625 / (double) diff1;
+          printf("Position %d, Data Type %d, Iteration %d, Errors: %d, completed %2.2f%%, Read %0.2fGB/s, Write %0.2fGB/s, ETA ", j, i, iterations_done * 10000, total, percent_done, 3.0 * total_bytes, total_bytes);
           print_time_from_seconds ((int) diff2);
           printf (")\n");
           fflush(NULL);
