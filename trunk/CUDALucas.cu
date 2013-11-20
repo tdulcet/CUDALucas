@@ -61,7 +61,7 @@ int fft_count;
 int threads[3] = {256,128,128};
 int max_threads;
 int error_reset = 85;
-int quitting, checkpoint_iter, fftlen, s_f, t_f, r_f, d_f, k_f;
+int quitting, checkpoint_iter, fftlen, s_f, r_f, d_f, k_f;
 int polite, polite_f;//, bad_selftest=0;
 
 char folder[132];
@@ -596,9 +596,9 @@ int init_ffts()
   char buf[132];
   int next_fft, j = 0, i = 0;
   int first_found = 0;
-  #define COUNT 160
+  #define COUNT 162
   int default_mult[COUNT] = {  //this batch from GTX570 timings
-                                2,     8,    10,    14,    16,    18,    20,    32,    36,    42,
+                                1, 2,  4,  8,  10,  14,    16,    18,    20,    32,    36,    42,
                                48,    50,    56,    60,    64,    70,    80,    84,    96,   112,
                               120,   126,   128,   144,   160,   162,   168,   180,   192,   224,
                               256,   288,   320,   324,   336,   360,   384,   392,   400,   448,
@@ -1169,7 +1169,7 @@ int isReasonable(int fft)
 { //From an idea of AXN's mentioned on the forums
   int i;
 
-  while(!(fft & 1)) fft /= 2;
+  while(!(fft & 1)) fft >>= 1;
   for(i = 3; i <= 7; i += 2) while((fft % i) == 0) fft /= i;
   return (fft);
 }
@@ -1294,7 +1294,7 @@ int isprime(unsigned int n)
   return 1;
 }
 
-void memtest(int size, int iter, int device)
+void memtest(int s, int iter, int device)
 {
   int i, j, k, m;
   int q = 60000091;
@@ -1315,44 +1315,44 @@ void memtest(int size, int iter, int device)
   long long ttime = 0;
   double total_bytes;
 
-  printf("\nInitializing memory test using %0.0fMB of memory on device %d\n", n / 1024.0 * size / 1024.0 * 8.0, device);
+  printf("\nInitializing memory test using %0.0fMB of memory on device %d...\n", n / 1024.0 * s / 1024.0 * 8.0, device);
+  printf("Input: size = %d, iterations = %d\n", s, iter);
   i_data = (int *) malloc (sizeof (int) * n);
-  get_weights(q, n);
-  alloc_gpu_mem(n);
-  write_gpu_data(q, n);
+  srand(time(0));
   for (j = 0; j < n; j++)
   {
-    srand(time(0));
     rand_int = rand() % (1 << 18);
     rand_int -= (1 << 17);
     i_data[j] = rand_int;
   }
   cudaMemcpy (g_xint, i_data, sizeof (int) * n, cudaMemcpyHostToDevice);
   free_host(i_data);
+
+  get_weights(q, n);
+  alloc_gpu_mem(n);
+  write_gpu_data(q, n);
   apply_weights <<<n / (2 * threads[0]), threads[0]>>> (g_x, g_xint, g_ttmp);
   d_data = (double *) malloc (sizeof (double) * n * 5);
   cudaMemcpy (d_data, g_ttmp, sizeof (double) * n, cudaMemcpyDeviceToHost);
   cudaMemcpy (&d_data[n], g_x, sizeof (double) * n, cudaMemcpyDeviceToHost);
-  //cufftSafeCall (cufftPlan1d (&plan, n / 2, CUFFT_Z2Z, 1));
   cufftSafeCall (cufftExecZ2Z (plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
   cudaMemcpy (&d_data[2 * n], g_x, sizeof (double) * n, cudaMemcpyDeviceToHost);
   rftfsub_kernel <<< n / (4 * threads[1]), threads[1] >>> (n, g_x, g_ct);
   cudaMemcpy (&d_data[3 * n], g_x, sizeof (double) * n, cudaMemcpyDeviceToHost);
   cufftSafeCall (cufftExecZ2Z (plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
   cudaMemcpy (&d_data[4 * n], g_x, sizeof (double) * n, cudaMemcpyDeviceToHost);
-  //cufftSafeCall (cufftDestroy (plan));
   free_gpu();
 
   cutilSafeCall (cudaMalloc ((void **) &d_compare, sizeof (int)));
   cutilSafeCall (cudaMemset (d_compare, 0, sizeof (int)));
-  cutilSafeCall (cudaMalloc ((void **) &dev_data, sizeof (double) * n * size));
+  cutilSafeCall (cudaMalloc ((void **) &dev_data, sizeof (double) * n * s));
 
-  total_iterations = size * 5 * iter;
+  total_iterations = s * 5 * iter;
   iter *= 10000;
   printf("Beginning test.\n\n");
   fflush(NULL);
   gettimeofday (&time0, NULL);
-  for(j = 0; j < size; j++)
+  for(j = 0; j < s; j++)
   {
     for(i = 0; i < 5; i++)
     {
@@ -1374,7 +1374,7 @@ void memtest(int size, int iter, int device)
           diff1 = 1000000 * (time1.tv_sec - time0.tv_sec) + time1.tv_usec - time0.tv_usec;
           ttime += diff1;
           time0 = time1;
-          diff2 = (long long) (ttime  * (total_iterations / (double) iterations_done - 1)/ 1000000);
+          diff2 = (long long) (ttime  * (total_iterations / (double) iterations_done - 1) / 1000000);
           total_bytes = 244140625 / (double) diff1;
           printf("Position %d, Data Type %d, Iteration %d, Errors: %d, completed %2.2f%%, Read %0.2fGB/s, Write %0.2fGB/s, ETA ", j, i, iterations_done * 10000, total, percent_done, 3.0 * total_bytes, total_bytes);
           print_time_from_seconds ((int) diff2);
@@ -1384,6 +1384,8 @@ void memtest(int size, int iter, int device)
       }
     }
   }
+  printf("Test complete. Total errors: %d.\n", total);
+  fflush(NULL);
   cutilSafeCall (cudaFree ((char *) dev_data));
   cutilSafeCall (cudaFree ((char *) d_compare));
   free((char*) d_data);
@@ -1432,7 +1434,7 @@ void cufftbench (int cufftbench_s, int cufftbench_e, int passes, int device_numb
 
   for (j = cufftbench_s; j <= cufftbench_e; j++)
   {
-    if(isReasonable(j) < 15)
+    if(isReasonable(j) == 1)
     {
       int n = j * 1024;
       cufftSafeCall (cufftPlan1d (&plan, n / 2, CUFFT_Z2Z, 1));
@@ -1473,13 +1475,23 @@ void cufftbench (int cufftbench_s, int cufftbench_e, int passes, int device_numb
   cutilSafeCall (cudaEventDestroy (stop));
 
   i = end - 1;
-  best_time = 10000.0f;
+  j = 1;
+  while(j < end) j <<= 1;
+  j >>= 1;
+  k = j - cufftbench_s;
+  best_time = total[i] + 1.0f;
   while(i >= 0)
   {
     if(total[i] > 0.0f && total[i] < best_time) best_time = total[i];
-    else total[i] = 0.0f;
+    else if(i != k) total[i] = 0.0f;
+    if(i == k)
+    {
+      j >>= 1;
+      k = j - cufftbench_s;
+    }
     i--;
   }
+
   char fftfile[32];
   FILE *fptr;
 
@@ -1651,7 +1663,6 @@ check (int q, char *expectedResidue)
    // use start_total because every time we write a checkpoint, total_time is increased,
    // but we don't quit everytime we write a checkpoint
   int offset;
-  int reset_fft = 0;
   int j_resume = 0, last_chk = 0;
   int interact_result = 0;
 
@@ -1669,7 +1680,7 @@ check (int q, char *expectedResidue)
     if(j == 1)
     {
       if(!restarting) printf ("Starting M%d fft length = %dK\n", q, n/1024);
-      restarting = round_off_test(q, n, &j, &offset);
+      //restarting = round_off_test(q, n, &j, &offset);
       if(!restarting)
 	    {
 	      cutilSafeCall (cudaMemcpy (x_int, g_xint, sizeof (int) * n, cudaMemcpyDeviceToHost));
@@ -1724,7 +1735,7 @@ check (int q, char *expectedResidue)
 	          printf("\n\n");
 		        j = last + 1;
 	        }
-          else
+          else if(j != last)
           {
             printf ("Iteration %d ", j);
             printbits_int (x_int, q, n, offset, 0, expectedResidue, 0);
@@ -1740,15 +1751,7 @@ check (int q, char *expectedResidue)
             fflush (stdout);
             j_resume = 0;
             last_chk = j / checkpoint_iter;
-            reset_err(&maxerr, error_reset / (float) 100.0); // Instead of tracking maxerr over whole run, reset it at each checkpoint.
-            if(reset_fft)
-            {
-              printf("Sticking point passed. Switching back to shorter fft.\n");
-              fftlen--;
-              restarting = 1;
-              reset_fft = 0;
-              reset_err(&maxerr, 0.0);
-            }
+            reset_err(&maxerr, error_reset / 100.0f); // Instead of tracking maxerr over whole run, reset it at each checkpoint.
           }
         }
 	    }
@@ -1757,12 +1760,10 @@ check (int q, char *expectedResidue)
 	      printf ("Iteration = %d, err = %0.5g > 0.40, fft = %dK, restarting from last checkpoint with longer fft.\n\n", j,  terr, n / 1024);
         fftlen++;
         restarting = 1;
-        reset_fft = 1;
         reset_err(&maxerr, 0.0);
       }
 
       if ( k_f && !quitting && (!(j & 15)) && _kbhit()) interact_result = interact(n); // abstracted to clean up check()
-      if(interact_result == 2) reset_fft = 0;
       if(interact_result == 1)
       {
         if(error_flag != 1)
@@ -1892,7 +1893,6 @@ int main (int argc, char *argv[])
 #define CHECKPOINT_ITER_DFLT 10000
 #define SAVE_FOLDER_DFLT "savefiles"
 #define S_F_DFLT 0
-#define T_F_DFLT 0
 #define K_F_DFLT 0
 #define D_F_DFLT 0
 #define POLITE_DFLT 1
@@ -1905,7 +1905,7 @@ int main (int argc, char *argv[])
   checkpoint_iter = -1;
   threads[0] = -1;
   fftlen = -1;
-  s_f = t_f = d_f = k_f = -1;
+  s_f = d_f = k_f = -1;
   polite_f = polite = -1;
   AID[0] = input_filename[0] = RESULTSFILE[0] = 0; /* First character is null terminator */
   char fft_str[132] = "\0";
@@ -1951,7 +1951,6 @@ int main (int argc, char *argv[])
       if( threads[0] < 1 ) threads[0] = THREADS_DFLT;
       if( fftlen < 0 ) fftlen = 0;
       if( s_f < 0 ) s_f = S_F_DFLT;
-      if( t_f < 0 ) t_f = T_F_DFLT;
       if( k_f < 0 ) k_f = K_F_DFLT;
       if( device_number < 0 ) device_number = 0;
       if( d_f < 0 ) d_f = D_F_DFLT;
@@ -2083,13 +2082,7 @@ void parse_args(int argc, char *argv[], int* q, int* device_number,
 {
 while (argc > 1)
     {
-      if (strcmp (argv[1], "-t") == 0)
-	{
-	  t_f = 1;
-	  argv++;
-	  argc--;
-	}
-      else if (strcmp (argv[1], "-h") == 0)
+      if (strcmp (argv[1], "-h") == 0)
         {
       	  fprintf (stderr,
 	       "$ CUDALucas -h|-v\n\n");
@@ -2320,9 +2313,6 @@ int interact(int n)
                     printf(" -- Decreasing fft length.\n");
                     fftlen--;
                     return 1;
-        case 'c' :
-                    printf(" -- fft length reset cancelled.\n");
-                    return 2;
         case 'Q' :
                     cutilSafeThreadSync();
                     if(threads[0] < max_threads) threads[0] *= 2;
