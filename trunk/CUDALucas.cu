@@ -1354,12 +1354,12 @@ void memtest(int s, int iter, int device)
   gettimeofday (&time0, NULL);
   for(j = 0; j < s; j++)
   {
+    m = (j + 1) % s;
     for(i = 0; i < 5; i++)
     {
       cutilSafeCall (cudaMemcpy (&dev_data[j * n], &d_data[i * n], sizeof (double) * n, cudaMemcpyHostToDevice));
       for(k = 1; k <= iter; k++)
       {
-        m = (j + 1) % s;
         memtest_copy_kernel <<<n / 512, 512 >>> (dev_data, n, j, m);
         compare_kernel<<<n / 512, 512>>> (&dev_data[m * n], &dev_data[j * n], d_compare);
         if(k%100 == 0) cutilSafeThreadSync();
@@ -1372,8 +1372,8 @@ void memtest(int s, int iter, int device)
           percent_done = iterations_done * 100 / (float) total_iterations;
           gettimeofday (&time1, NULL);
           diff1 = 1000000 * (time1.tv_sec - time0.tv_sec) + time1.tv_usec - time0.tv_usec;
+          gettimeofday (&time0, NULL);
           ttime += diff1;
-          time0 = time1;
           diff2 = (long long) (ttime  * (total_iterations / (double) iterations_done - 1) / 1000000);
           total_bytes = 244140625 / (double) diff1;
           printf("Position %d, Data Type %d, Iteration %d, Errors: %d, completed %2.2f%%, Read %0.2fGB/s, Write %0.2fGB/s, ETA ", j, i, iterations_done * 10000, total, percent_done, 3.0 * total_bytes, total_bytes);
