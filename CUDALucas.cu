@@ -1359,7 +1359,7 @@ void memtest(int s, int iter, int device)
       cutilSafeCall (cudaMemcpy (&dev_data[j * n], &d_data[i * n], sizeof (double) * n, cudaMemcpyHostToDevice));
       for(k = 1; k <= iter; k++)
       {
-        m = (j + 1) % size;
+        m = (j + 1) % s;
         memtest_copy_kernel <<<n / 512, 512 >>> (dev_data, n, j, m);
         compare_kernel<<<n / 512, 512>>> (&dev_data[m * n], &dev_data[j * n], d_compare);
         if(k%100 == 0) cutilSafeThreadSync();
