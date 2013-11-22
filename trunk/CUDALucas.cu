@@ -1176,10 +1176,10 @@ int isReasonable(int fft)
 
 void threadbench (int n, int passes, int device_number)
 {
-  float total[216] = {0.0f}, outerTime, maxerr = 0.5f;
-  int threads[] = {32, 64, 128, 256, 512, 1024};
+  float total[36] = {0.0f}, outerTime, maxerr = 0.5f;
+  int threads[6] = {32, 64, 128, 256, 512, 1024};
   int t1, t2, t3, i;
-  float best_time = 10000.0f;
+  float best_time;
   int best_t1 = 0, best_t2 = 0, best_t3 = 0;
   int pass;
   cudaEvent_t start, stop;
@@ -1204,53 +1204,85 @@ void threadbench (int n, int passes, int device_number)
   cutilSafeCall (cudaEventCreateWithFlags (&stop, cudaEventBlockingSync));
   cufftSafeCall (cufftPlan1d (&plan, n / 2, CUFFT_Z2Z, 1));
 
+  t2 = 2;
   for(t1 = 0; t1 < 6; t1++)
   {
     if(n / (2 * threads[t1]) <= dev.maxGridSize[0] && n % (2 * threads[t1]) == 0)
     {
-      for (t2 = 0; t2 < 6; t2++)
+     for (t3 = 0; t3 < 6; t3++)
       {
-        if(n / (4 * threads[t2]) <= dev.maxGridSize[0] && n % (4 * threads[t2]) == 0)
+         for(pass = 1; pass <= passes; pass++)
         {
-          for (t3 = 0; t3 < 6; t3++)
+          cutilSafeCall (cudaEventRecord (start, 0));
+          for (i = 0; i < 50; i++)
           {
-            for(pass = 1; pass <= passes; pass++)
-            {
-              cutilSafeCall (cudaEventRecord (start, 0));
-              for (i = 0; i < 50; i++)
-              {
+            //cufftSafeCall (cufftExecZ2Z (plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
+            rftfsub_kernel <<< n / (4 * threads[t2]), threads[t2] >>> (n, g_x, g_ct);
+            //cufftSafeCall (cufftExecZ2Z (plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
+            norm1 <<<n / (2 * threads[t1]), threads[t1] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
+            norm2 <<< (n / (2 * threads[t1]) + threads[t3] - 1) / threads[t3], threads[t3] >>>
+            (g_x, NULL, n, threads[t1], g_data, g_carry, g_ttp1, 0);
+          }
+          cutilSafeCall (cudaEventRecord (stop, 0));
+          cutilSafeCall (cudaEventSynchronize (stop));
+          cutilSafeCall (cudaEventElapsedTime (&outerTime, start, stop));
+          outerTime /= 50.0f;
+          total[6 * t1 + t3] += outerTime;
+        }
+        printf ("fft size = %dK, ave time = %2.4f msec, Norm1 threads %d, Mult threads %d, Norm2 threads %d\n",
+                  n / 1024 , total[6 * t1 + t3] / passes, threads[t1], threads[t2], threads[t3]);
+        fflush(NULL);
+      }
+    }
+  }
+  best_time = 10000.0f;
+  for (i = 0; i < 36; i++)
+  {
+    if(total[i] < best_time && total[i] > 0.0f)
+    {
+      best_time = total[i];
+      best_t3 = i % 6;
+      best_t1 = i / 6;
+    }
+  }
+  for(i = 0; i < 6; i++) total[i] = 0.0f;
+
+  t1 = best_t1;
+  t3 = best_t3;
+  for (t2 = 0; t2 < 6; t2++)
+  {
+    if(n / (4 * threads[t2]) <= dev.maxGridSize[0] && n % (4 * threads[t2]) == 0)
+    {
+      for(pass = 1; pass <= passes; pass++)
+      {
+        cutilSafeCall (cudaEventRecord (start, 0));
+        for (i = 0; i < 50; i++)
+        {
           cufftSafeCall (cufftExecZ2Z (plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
           rftfsub_kernel <<< n / (4 * threads[t2]), threads[t2] >>> (n, g_x, g_ct);
           cufftSafeCall (cufftExecZ2Z (plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
           norm1 <<<n / (2 * threads[t1]), threads[t1] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
           norm2 <<< (n / (2 * threads[t1]) + threads[t3] - 1) / threads[t3], threads[t3] >>>
-                (g_x, NULL, n, threads[0], g_data, g_carry, g_ttp1, 0);
-              }
-              cutilSafeCall (cudaEventRecord (stop, 0));
-              cutilSafeCall (cudaEventSynchronize (stop));
-              cutilSafeCall (cudaEventElapsedTime (&outerTime, start, stop));
-              outerTime /= 50.0f;
-              total[36 * t1 + 6 * t2 + t3] += outerTime;
-            }
-            printf ("fft size = %dK, ave time = %2.4f msec, Norm1 threads %d, Mult threads %d, Norm2 threads %d\n",
-                      n / 1024 , total[36 * t1 + 6 * t2 + t3] / passes, threads[t1], threads[t2], threads[t3]);
-            fflush(NULL);
-          }
+          (g_x, NULL, n, threads[t1], g_data, g_carry, g_ttp1, 0);
         }
+        cutilSafeCall (cudaEventRecord (stop, 0));
+        cutilSafeCall (cudaEventSynchronize (stop));
+        cutilSafeCall (cudaEventElapsedTime (&outerTime, start, stop));
+        outerTime /= 50.0f;
+        total[t2] += outerTime;
       }
+      printf ("fft size = %dK, ave time = %2.4f msec, Norm1 threads %d, Mult threads %d, Norm2 threads %d\n",
+              n / 1024 , total[t2] / passes, threads[t1], threads[t2], threads[t3]);
+      fflush(NULL);
     }
   }
-
-  for (i = 0; i < 216; i++)
+  best_time = 10000.0f;
+  for (i = 0; i < 6; i++)
   {
     if(total[i] < best_time && total[i] > 0.0f)
     {
-      int j = i;
       best_time = total[i];
-      best_t3 = j % 6;
-      j /= 6;
-      best_t2 = j % 6;
-      best_t1 = j / 6;
+      best_t2 = i;
     }
   }
   printf("\nBest time for fft = %dK, time: %2.4f, t1 = %d, t2 = %d, t3 = %d\n",
@@ -1296,13 +1328,14 @@ int isprime(unsigned int n)
 
 void memtest(int s, int iter, int device)
 {
-  int i, j, k, m;
+  int i, j, k, m, u, v;
   int q = 60000091;
   int n = 3200 * 1024;
   int rand_int;
   int *i_data;
   double *d_data;
-  double *dev_data;
+  double *dev_data1;
+  double *dev_data2;
   int *d_compare;
   int h_compare;
   int total = 0;
@@ -1315,8 +1348,21 @@ void memtest(int s, int iter, int device)
   long long ttime = 0;
   double total_bytes;
 
+  size_t global_mem, free_mem;
+
+  cudaMemGetInfo(&free_mem, &global_mem);
+#ifdef _MSC_VER
+  printf("CUDA reports %IuM of %IuM GPU memory free.\n",free_mem/1024/1024, global_mem/1024/1024);
+#else
+  printf("CUDA reports %zuM of %zuM GPU memory free.\n",free_mem/1024/1024, global_mem/1024/1024);
+#endif
+if((size_t) s *1024 * 1024 * 25  > free_mem )
+  {
+    s = free_mem / 1024 / 1024 / 25;
+     printf("Reducing size to %d\n", s);
+  }
   printf("\nInitializing memory test using %0.0fMB of memory on device %d...\n", n / 1024.0 * s / 1024.0 * 8.0, device);
-  printf("Input: size = %d, iterations = %d\n", s, iter);
+
   i_data = (int *) malloc (sizeof (int) * n);
   srand(time(0));
   for (j = 0; j < n; j++)
@@ -1345,23 +1391,26 @@ void memtest(int s, int iter, int device)
 
   cutilSafeCall (cudaMalloc ((void **) &d_compare, sizeof (int)));
   cutilSafeCall (cudaMemset (d_compare, 0, sizeof (int)));
-  cutilSafeCall (cudaMalloc ((void **) &dev_data, sizeof (double) * n * s));
+  if( s > 3) u = (s + 1) / 2;
+  else u = s;
+  v = s / 2;
+  cutilSafeCall (cudaMalloc ((void **) &dev_data1, sizeof (double) * n * u));
 
   total_iterations = s * 5 * iter;
   iter *= 10000;
   printf("Beginning test.\n\n");
   fflush(NULL);
   gettimeofday (&time0, NULL);
-  for(j = 0; j < s; j++)
+  for(j = 0; j < u; j++)
   {
-    m = (j + 1) % s;
+    m = (j + 1) % u;
     for(i = 0; i < 5; i++)
     {
-      cutilSafeCall (cudaMemcpy (&dev_data[j * n], &d_data[i * n], sizeof (double) * n, cudaMemcpyHostToDevice));
+      cutilSafeCall (cudaMemcpy (&dev_data1[j * n], &d_data[i * n], sizeof (double) * n, cudaMemcpyHostToDevice));
       for(k = 1; k <= iter; k++)
       {
-        memtest_copy_kernel <<<n / 512, 512 >>> (dev_data, n, j, m);
-        compare_kernel<<<n / 512, 512>>> (&dev_data[m * n], &dev_data[j * n], d_compare);
+        memtest_copy_kernel <<<n / 512, 512 >>> (dev_data1, n, j, m);
+        compare_kernel<<<n / 512, 512>>> (&dev_data1[m * n], &dev_data1[j * n], d_compare);
         if(k%100 == 0) cutilSafeThreadSync();
         if(k%10000 == 0)
         {
@@ -1384,23 +1433,68 @@ void memtest(int s, int iter, int device)
       }
     }
   }
+  if(s > 3)
+  {
+    cutilSafeCall (cudaMalloc ((void **) &dev_data2, sizeof (double) * n * v));
+    cutilSafeCall (cudaFree ((char *) dev_data1));
+    for(j = 0; j < v; j++)
+    {
+      m = (j + 1) % v;
+      for(i = 0; i < 5; i++)
+      {
+        cutilSafeCall (cudaMemcpy (&dev_data2[j * n], &d_data[i * n], sizeof (double) * n, cudaMemcpyHostToDevice));
+        for(k = 1; k <= iter; k++)
+        {
+          memtest_copy_kernel <<<n / 512, 512 >>> (dev_data2, n, j, m);
+          compare_kernel<<<n / 512, 512>>> (&dev_data2[m * n], &dev_data2[j * n], d_compare);
+          if(k%100 == 0) cutilSafeThreadSync();
+          if(k%10000 == 0)
+          {
+            cutilSafeCall (cudaMemcpy (&h_compare, d_compare, sizeof (int), cudaMemcpyDeviceToHost));
+            cutilSafeCall (cudaMemset (d_compare, 0, sizeof (int)));
+            total += h_compare;
+            iterations_done++;
+            percent_done = iterations_done * 100 / (float) total_iterations;
+            gettimeofday (&time1, NULL);
+            diff1 = 1000000 * (time1.tv_sec - time0.tv_sec) + time1.tv_usec - time0.tv_usec;
+            gettimeofday (&time0, NULL);
+            ttime += diff1;
+            diff2 = (long long) (ttime  * (total_iterations / (double) iterations_done - 1) / 1000000);
+            total_bytes = 244140625 / (double) diff1;
+            printf("Position %d, Data Type %d, Iteration %d, Errors: %d, completed %2.2f%%, Read %0.2fGB/s, Write %0.2fGB/s, ETA ", j + u, i, iterations_done * 10000, total, percent_done, 3.0 * total_bytes, total_bytes);
+            print_time_from_seconds ((int) diff2);
+            printf (")\n");
+            fflush(NULL);
+          }
+        }
+      }
+    }
+  }
   printf("Test complete. Total errors: %d.\n", total);
   fflush(NULL);
-  cutilSafeCall (cudaFree ((char *) dev_data));
+  if(s > 3) cutilSafeCall (cudaFree ((char *) dev_data2));
+  else cutilSafeCall (cudaFree ((char *) dev_data1));
+  //cutilSafeCall (cudaFree ((char *) dev_data2));
+  //cutilSafeCall (cudaFree ((char *) dev_data1));
   cutilSafeCall (cudaFree ((char *) d_compare));
   free((char*) d_data);
 }
 
 void cufftbench (int cufftbench_s, int cufftbench_e, int passes, int device_number)
 {
+
   cudaEvent_t start, stop;
   float outerTime;
   int i, j, k;
   int end = cufftbench_e - cufftbench_s + 1;
   float best_time;
   float *total, *max_diff, maxerr = 0.5f;
+  //float total2[36] = {0.0f};
   int threads[] = {32, 64, 128, 256, 512, 1024};
   int t1 = 3, t2 = 2, t3 = 2;
+  //int best_t1 = 0, best_t2 = 0, best_t3 = 0;
+  //int *bt1, *bt2, *bt3;
+  //int pass;
 
   if(end == 1)
   {
@@ -1411,6 +1505,9 @@ void cufftbench (int cufftbench_s, int cufftbench_e, int passes, int device_numb
   printf ("CUDA bench, testing reasonable fft sizes %dK to %dK, doing %d passes.\n", cufftbench_s, cufftbench_e, passes);
 
   total = (float *) malloc (sizeof (float) * end);
+  //bt1 = (int *) malloc (sizeof (int) * end);
+  //bt2 = (int *) malloc (sizeof (int) * end);
+  //bt3 = (int *) malloc (sizeof (int) * end);
   max_diff = (float *) malloc (sizeof (float) * end);
   for(i = 0; i < end; i++)
   {
@@ -1438,6 +1535,98 @@ void cufftbench (int cufftbench_s, int cufftbench_e, int passes, int device_numb
     {
       int n = j * 1024;
       cufftSafeCall (cufftPlan1d (&plan, n / 2, CUFFT_Z2Z, 1));
+  /*t2 = 2;
+  for(i = 0; i < 36; i++) total2[i] = 0.0f;
+  for(t1 = 0; t1 < 6; t1++)
+  {
+    if(n / (2 * threads[t1]) <= dev.maxGridSize[0] && n % (2 * threads[t1]) == 0)
+    {
+     for (t3 = 0; t3 < 6; t3++)
+      {
+         for(pass = 1; pass <= passes; pass++)
+        {
+          cutilSafeCall (cudaEventRecord (start, 0));
+          for (i = 0; i < 50; i++)
+          {
+            //cufftSafeCall (cufftExecZ2Z (plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
+            rftfsub_kernel <<< n / (4 * threads[t2]), threads[t2] >>> (n, g_x, g_ct);
+            //cufftSafeCall (cufftExecZ2Z (plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
+            norm1 <<<n / (2 * threads[t1]), threads[t1] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
+            norm2 <<< (n / (2 * threads[t1]) + threads[t3] - 1) / threads[t3], threads[t3] >>>
+            (g_x, NULL, n, threads[t1], g_data, g_carry, g_ttp1, 0);
+          }
+          cutilSafeCall (cudaEventRecord (stop, 0));
+          cutilSafeCall (cudaEventSynchronize (stop));
+          cutilSafeCall (cudaEventElapsedTime (&outerTime, start, stop));
+          outerTime /= 50.0f;
+          total2[6 * t1 + t3] += outerTime;
+        }
+        //printf ("fft size = %dK, ave time = %2.4f msec, Norm1 threads %d, Mult threads %d, Norm2 threads %d\n",
+        //          n / 1024 , total[6 * t1 + t3] / passes, threads[t1], threads[t2], threads[t3]);
+        //fflush(NULL);
+      }
+    }
+  }
+  best_time = 10000.0f;
+  for (i = 0; i < 36; i++)
+  {
+    if(total2[i] < best_time && total2[i] > 0.0f)
+    {
+      best_time = total2[i];
+      best_t3 = i % 6;
+      best_t1 = i / 6;
+    }
+  }
+  for(i = 0; i < 6; i++) total2[i] = 0.0f;
+
+  t1 = best_t1;
+  t3 = best_t3;
+  for (t2 = 0; t2 < 6; t2++)
+  {
+    if(n / (4 * threads[t2]) <= dev.maxGridSize[0] && n % (4 * threads[t2]) == 0)
+    {
+      for(pass = 1; pass <= passes; pass++)
+      {
+        cutilSafeCall (cudaEventRecord (start, 0));
+        for (i = 0; i < 50; i++)
+        {
+          cufftSafeCall (cufftExecZ2Z (plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
+          rftfsub_kernel <<< n / (4 * threads[t2]), threads[t2] >>> (n, g_x, g_ct);
+          cufftSafeCall (cufftExecZ2Z (plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
+          norm1 <<<n / (2 * threads[t1]), threads[t1] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
+          norm2 <<< (n / (2 * threads[t1]) + threads[t3] - 1) / threads[t3], threads[t3] >>>
+          (g_x, NULL, n, threads[t1], g_data, g_carry, g_ttp1, 0);
+        }
+        cutilSafeCall (cudaEventRecord (stop, 0));
+        cutilSafeCall (cudaEventSynchronize (stop));
+        cutilSafeCall (cudaEventElapsedTime (&outerTime, start, stop));
+        outerTime /= 50.0f;
+        total2[t2] += outerTime;
+      }
+      //printf ("fft size = %dK, ave time = %2.4f msec, Norm1 threads %d, Mult threads %d, Norm2 threads %d\n",
+     //         n / 1024 , total[t2] / passes, threads[t1], threads[t2], threads[t3]);
+     // fflush(NULL);
+    }
+  }
+  best_time = 10000.0f;
+  for (i = 0; i < 6; i++)
+  {
+    if(total2[i] < best_time && total2[i] > 0.0f)
+    {
+      best_time = total2[i];
+      best_t2 = i;
+    }
+  }
+  printf("Best time for fft = %dK, time: %2.4f, t1 = %d, t2 = %d, t3 = %d\n",
+  n/1024, best_time / passes, threads[best_t1], threads[best_t2], threads[best_t3]);
+  total[j - cufftbench_s] = total2[best_t2];
+  bt1[j - cufftbench_s] = best_t1;
+  bt2[j - cufftbench_s] = best_t2;
+  bt3[j - cufftbench_s] = best_t3;
+
+
+//      int n = j * 1024;
+//      cufftSafeCall (cufftPlan1d (&plan, n / 2, CUFFT_Z2Z, 1));*/
       for(k = 0; k < passes; k++)
       {
         cutilSafeCall (cudaEventRecord (start, 0));
@@ -1462,6 +1651,7 @@ void cufftbench (int cufftbench_s, int cufftbench_e, int passes, int device_numb
       printf ("fft size = %dK, ave time = %2.4f msec, max-ave = %0.5f\n",
                   j , total[i] / passes, max_diff[i] - total[i] / passes);
       fflush(NULL);
+
     }
   }
   cutilSafeCall (cudaFree ((char *) g_x));
@@ -1523,7 +1713,7 @@ void cufftbench (int cufftbench_s, int cufftbench_e, int passes, int device_numb
     fprintf (fptr, "Compatibility       %d.%d\n", dev.major, dev.minor);
     fprintf (fptr, "clockRate (MHz)     %d\n", dev.clockRate/1000);
     fprintf (fptr, "memClockRate (MHz)  %d\n", dev.memoryClockRate/1000);
-    fprintf(fptr, "\n  fft    max exp  ms/iter\n");
+    fprintf(fptr, "\n  fft    max exp  ms/iter norm1   mult  norm2\n");
     for(i = 0; i < end; i++)
     {
       if(total[i] > 0.0f)
@@ -1540,6 +1730,9 @@ void cufftbench (int cufftbench_s, int cufftbench_e, int passes, int device_numb
    }
 
   free ((char *) total);
+  //free ((char *) bt1);
+  //free ((char *) bt2);
+  //free ((char *) bt3);
   free ((char *) max_diff);
 }
 
