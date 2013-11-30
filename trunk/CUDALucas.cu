@@ -1,4 +1,4 @@
-char program[] = "CUDALucas v2.05 Beta";
+char program[]="CUDALucas v2.05 Beta";
 /* CUDALucas.c
    Shoichiro Yamada Oct. 2010
 
@@ -1030,11 +1030,11 @@ int printbits_int (int *x_int, int q, int n, int offset, FILE* fp, char *expecte
     }
     sprintf (s_residue, "%016llx", residue);
 
-    printf ("M%d, 0x%s,", q, s_residue);
-    printf (" n = %dK, %s", n/1024, program);
+    printf ("/%d, 0x%s,", q, s_residue);
+    printf (" %dK, %s", n/1024, program);
     if (fp)
     {
-      fprintf (fp, "M%d, 0x%s,", q, s_residue);
+      fprintf (fp, "M( %d )C, 0x%s,", q, s_residue);
       if(o_f) fprintf(fp, " offset = %d,", offset);
       fprintf (fp, " n = %dK, %s", n/1024, program);
     }
@@ -1887,7 +1887,7 @@ check (int q, char *expectedResidue)
     }
     else
     {
-      printf ("Continuing work from a partial result of M%d fft length = %dK iteration = %d\n", q, n/1024, j);
+      printf ("\nContinuing M%d @ iteration %d with fft length %dK, %5.2f%% done\n\n", q, j, n/1024, (float) j/q*100);
       j_resume = j % checkpoint_iter - 1;
       last_chk = j / checkpoint_iter;
     }
@@ -1930,17 +1930,17 @@ check (int q, char *expectedResidue)
 	        }
           else if(j != last)
           {
-            printf ("Iteration %d ", j);
+            printf ("Iteration %d", j);
             printbits_int (x_int, q, n, offset, 0, expectedResidue, 0);
             long long diff = time1.tv_sec - time0.tv_sec;
             long long diff1 = 1000000 * diff + time1.tv_usec - time0.tv_usec;
             long long diff2 = (last - j) * diff1 / (((j / checkpoint_iter - last_chk) * checkpoint_iter - j_resume) *  1e6);
             gettimeofday (&time0, NULL);
-            printf (" err = %5.5f (", maxerr);
+            printf ("\n\terror = %5.5f | real: ", maxerr);
             print_time_from_seconds ((int) diff);
-            printf (" real, %4.4f ms/iter, ETA ", diff1 / 1000.0 / ((j / checkpoint_iter - last_chk) * checkpoint_iter - j_resume));
+            printf (" | %4.4f ms/iter | ETA: ", diff1 / 1000.0 / ((j / checkpoint_iter - last_chk) * checkpoint_iter - j_resume));
             print_time_from_seconds ((int) diff2);
-            printf (")\n");
+            printf ("\n");
             fflush (stdout);
             j_resume = 0;
             last_chk = j / checkpoint_iter;
