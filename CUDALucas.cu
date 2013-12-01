@@ -1936,11 +1936,11 @@ check (int q, char *expectedResidue)
             long long diff1 = 1000000 * diff + time1.tv_usec - time0.tv_usec;
             long long diff2 = (last - j) * diff1 / (((j / checkpoint_iter - last_chk) * checkpoint_iter - j_resume) *  1e6);
             gettimeofday (&time0, NULL);
-            printf ("\n\terror = %5.5f | real: ", maxerr);
+            printf (", error = %5.5f, real: ", maxerr);
             print_time_from_seconds ((int) diff);
-            printf (" | %4.4f ms/iter | ETA: ", diff1 / 1000.0 / ((j / checkpoint_iter - last_chk) * checkpoint_iter - j_resume));
+            printf (", %4.4f ms/iter, ETA: ", diff1 / 1000.0 / ((j / checkpoint_iter - last_chk) * checkpoint_iter - j_resume));
             print_time_from_seconds ((int) diff2);
-            printf ("\n");
+            printf (", %5.2f%%\n", (float) j/q*100);
             fflush (stdout);
             j_resume = 0;
             last_chk = j / checkpoint_iter;
