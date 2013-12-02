@@ -767,10 +767,18 @@ init_device (int device_number)
     }
   cudaSetDevice (device_number);
   cutilSafeCall(cudaSetDeviceFlags (cudaDeviceBlockingSync));
+  cudaGetDeviceProperties (&dev, device_number);
+  // From Iain
+  if (dev.major == 1 && dev.minor < 3)
+    {
+      printf("A GPU with compute capability >= 1.3 is required for double precision arithmetic\n");
+	  printf("See http://www.mersenne.ca/cudalucas.php for a list of cards\n\n");
+      exit (2);
+    }
+  max_threads = (int) dev.maxThreadsPerBlock;
   if (d_f)
     {
-      cudaGetDeviceProperties (&dev, device_number);
-       printf ("------- DEVICE %d -------\n",    device_number);
+      printf ("------- DEVICE %d -------\n",    device_number);
       printf ("name                %s\n",       dev.name);
       printf ("Compatibility       %d.%d\n",    dev.major, dev.minor);
       printf ("clockRate (MHz)     %d\n",       dev.clockRate/1000);
@@ -809,13 +817,6 @@ init_device (int device_number)
       printf ("textureAlignment    %zu\n",      dev.textureAlignment);
 #endif
       printf ("deviceOverlap       %d\n\n",     dev.deviceOverlap);
-      // From Iain
-      if (dev.major == 1 && dev.minor < 3)
-      {
-        printf("A GPU with compute capability >= 1.3 is required for double precision arithmetic\n\n");
-        exit (2);
-      }
-      max_threads = (int) dev.maxThreadsPerBlock;
     }
 }
 
