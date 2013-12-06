@@ -25,7 +25,7 @@ inline cudaError cutilDeviceReset()
 // The advantage is the developers gets to use the inline function so they can debug
 #define cutilSafeCallNoSync(err)     __cudaSafeCallNoSync(err, __FILE__, __LINE__)
 #define cutilSafeCall(err)           __cudaSafeCall      (err, __FILE__, __LINE__)
-#define cutilSafeCall1(err,iter)     __cudaSafeCall1      (err, __FILE__, __LINE__,iter)
+#define cutilSafeCall1(err)          __cudaSafeCall1      (err, __FILE__, __LINE__)
 #define cutilSafeThreadSync()        __cudaSafeThreadSync(__FILE__, __LINE__)
 #define cufftSafeCall(err)           __cufftSafeCall     (err, __FILE__, __LINE__)
 
@@ -42,27 +42,25 @@ inline void __cudaSafeCallNoSync( cudaError err, const char *file, const int lin
 
 inline void __cudaSafeCall( cudaError err, const char *file, const int line) {
 	if( cudaSuccess != err) {
+		fprintf(stderr, "%s(%i) : cudaSafeCall() Runtime API error %d: %s.\n", file, line, (int)err, cudaGetErrorString( err ));
+    exit(-1);
+	}
+}
+
+inline cudaError __cudaSafeCall1( cudaError err, const char *file, const int line) {
+	if( cudaSuccess != err) {
 		fprintf(stderr, "%s(%i) : cudaSafeCall() Runtime API error %d: %s.\n",
 				file, line, (int)err, cudaGetErrorString( err ));
-		exit(-1);
 	}
+	return err;
 }
 
-inline void __cudaSafeCall1( cudaError err, const char *file, const int line , int iter) {
-	if( cudaSuccess != err) {
-		fprintf(stderr, "%s(%i) : cudaSafeCall() Runtime API error %d: %s, iteration %d.\n",
-				file, line, (int)err, cudaGetErrorString( err ) ,iter);
-		exit(-1);
-	}
-}
-
-inline void __cudaSafeThreadSync( const char *file, const int line ) {
+inline cudaError __cudaSafeThreadSync( const char *file, const int line ) {
 	cudaError err = cutilDeviceSynchronize();
 	if ( cudaSuccess != err) {
-		fprintf(stderr, "%s(%i) : cudaDeviceSynchronize() Runtime API error %d: %s.\n",
-				file, line, (int)err, cudaGetErrorString( err ) );
-		exit(-1);
+		fprintf(stderr, "%s(%i) : cudaDeviceSynchronize() Runtime API error %d: %s.\n",	file, line, (int)err, cudaGetErrorString( err ) );
 	}
+  return err;
 }
 
 #ifdef _CUFFT_H_
