@@ -1,4 +1,4 @@
-char program[] = "CUDALucas v2.05";
+char program[] = "CUDALucas v2.05 Beta";
 /* CUDALucas.c
    Shoichiro Yamada Oct. 2010
 
