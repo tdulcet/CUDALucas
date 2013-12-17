@@ -64,7 +64,7 @@ mfaktc 0.07-0.14 to see Luigis code.
 #include <sys/stat.h>
 #include <time.h>
 
-#define MAX_LINE_LENGTH 131
+#define MAX_LINE_LENGTH 192
 
 #ifndef _MSC_VER /* See next comment */
   #define _fopen fopen
@@ -95,7 +95,7 @@ mfaktc 0.07-0.14 to see Luigis code.
   #define sscanf sscanf_s /* This only works for scanning numbers, or strings with a defined length (e.g. "%131s") */
   void strcopy(char* dest, char* src, size_t n)
   {
-    strncpy_s(dest, MAX_LINE_LENGTH+1, src, n);
+    strncpy_s(dest, MAX_LINE_LENGTH, src, n);
   }
   FILE* _fopen(const char* path, const char* mode)
   {
@@ -202,7 +202,7 @@ enum ASSIGNMENT_ERRORS
 	CANT_RENAME =6
 };
 
-typedef char LINE_BUFFER[MAX_LINE_LENGTH+1];
+typedef char LINE_BUFFER[MAX_LINE_LENGTH];
 
 enum PARSE_WARNINGS
 {
@@ -220,8 +220,8 @@ struct ASSIGNMENT
 {
 	int exponent;
 	int fft_length;
-	char hex_key[MAX_LINE_LENGTH+1];	// optional assignment key....
-	char comment[MAX_LINE_LENGTH+1];	// optional comment -- it followed the assignment on the same line.
+	char hex_key[MAX_LINE_LENGTH];	// optional assignment key....
+	char comment[MAX_LINE_LENGTH];	// optional comment -- it followed the assignment on the same line.
 };
 // Should we include FFT length in this?
 
@@ -240,7 +240,7 @@ output
   #ifdef EBUG
   printf("Entered p_w_l\n");
   #endif
-  char line[MAX_LINE_LENGTH+1], *ptr, *ptr_start, *ptr_end, *ptr2;
+  char line[MAX_LINE_LENGTH], *ptr, *ptr_start, *ptr_end, *ptr2;
 
   /* See below about LONG_LINE */
   //int c;	// extended char pulled from stream;
@@ -256,17 +256,17 @@ output
   assignment->exponent = 0;
   assignment->hex_key[0] = 0;
 
-  if(NULL==fgets(line, MAX_LINE_LENGTH+1, f_in))
+  if(NULL==fgets(line, MAX_LINE_LENGTH, f_in))
   {
     return END_OF_FILE;
   }
 
   if (linecopy != NULL)	{ // maybe it wasn't needed....
-    strcopy(*linecopy, line, MAX_LINE_LENGTH+1);	// this is what was read...
+    strcopy(*linecopy, line, MAX_LINE_LENGTH);	// this is what was read...
     if( NULL != strchr(*linecopy, '\n') )
       *strchr(*linecopy, '\n') = '\0';
   }
-  if((strlen(line) == MAX_LINE_LENGTH) && (!feof(f_in)) && (line[strlen(line)-1] !='\n') ) // long lines disallowed,
+  if((strlen(line) >= MAX_LINE_LENGTH - 1) && (!feof(f_in)) && (line[strlen(line)-1] !='\n') ) // long lines disallowed,
   {
     return LONG_LINE;
     // I see no reason to go to all of the following fuss
@@ -535,7 +535,7 @@ enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, int* f
     printf("Struct fft is %d, *fft_length is %d\n", assignment.fft_length, *fft_length);
     #endif
 
-    if (key!=NULL)strcopy(*key, assignment.hex_key, MAX_LINE_LENGTH+1);
+    if (key!=NULL)strcopy(*key, assignment.hex_key, MAX_LINE_LENGTH);
 
     return OK;
   }
@@ -672,11 +672,11 @@ enum ASSIGNMENT_ERRORS clear_assignment(char *filename, int exponent)
 int IniGetInt(char *inifile, char *name, int *value, int dflt)
 {
   FILE *in;
-  char buf[MAX_LINE_LENGTH+1];
+  char buf[MAX_LINE_LENGTH];
   int found=0;
   in=_fopen(inifile,"r");
   if(!in) goto error;
-  while(fgets(buf,MAX_LINE_LENGTH,in) && !found)
+  while(fgets(buf,MAX_LINE_LENGTH-1,in) && !found)
   {
     if(!strncmp(buf,name,strlen(name)) && buf[strlen(name)]=='=')
     {
@@ -691,11 +691,11 @@ int IniGetInt(char *inifile, char *name, int *value, int dflt)
 int IniGetInt3(char *inifile, char *name, int *value, int *value1, int *value2, int dflt)
 {
   FILE *in;
-  char buf[MAX_LINE_LENGTH+1];
+  char buf[MAX_LINE_LENGTH];
   int found=0;
   in=_fopen(inifile,"r");
   if(!in) goto error;
-  while(fgets(buf,MAX_LINE_LENGTH,in) && !found)
+  while(fgets(buf,MAX_LINE_LENGTH-1,in) && !found)
   {
     if(!strncmp(buf,name,strlen(name)) && buf[strlen(name)]=='=')
     {
@@ -710,16 +710,28 @@ int IniGetInt3(char *inifile, char *name, int *value, int *value1, int *value2, 
 int IniGetStr(char *inifile, char *name, char *string, char* dflt)
 {
   FILE *in;
-  char buf[MAX_LINE_LENGTH+1];
+  char buf[MAX_LINE_LENGTH];
   int found=0;
+  int idx = strlen(name);
+  int len = MAX_LINE_LENGTH;
   in=_fopen(inifile,"r");
   if(!in)
     goto error;
-  while(fgets(buf,MAX_LINE_LENGTH,in) && !found)
+  while(fgets(buf,MAX_LINE_LENGTH - 1,in) && !found)
   {
-    if(!strncmp(buf,name,strlen(name)) && buf[strlen(name)]=='=')
+    if(!strncmp(buf,name,idx) && buf[idx]=='=')
     {
-      if(sscanf(&(buf[strlen(name)+1]),"%131s",string)==1)found=1; // CuLu's strs are 132 bytes
+      //if(sscanf(&(buf[strlen(name)+1]),"%131s",string)==1)found=1; // CuLu's strs are 132 bytes
+      // These next 7 lines shamelessly stolen from mfaktc 2.0
+      found = strlen(buf + idx + 1);
+      found = (len > found ? found : len) - 1;
+      if (found)
+      {
+        strncpy(string, buf + idx + 1, found);
+        if(string[found - 1] == '\r') found--; //remove '\r' from string, this happens when reading a DOS/Windows formatted file on Linux
+      }
+      string[found] = '\0';
+      // End of theft
     }
   }
   fclose(in);
