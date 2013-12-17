@@ -12,7 +12,7 @@ mfaktc is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
-                                
+
 You should have received a copy of the GNU General Public License
 along with mfaktc.  If not, see <http://www.gnu.org/licenses/>.
 */
@@ -28,8 +28,8 @@ enum ASSIGNMENT_ERRORS
 	CANT_RENAME =6
 };
 
-#define MAX_LINE_LENGTH 131
-typedef char LINE_BUFFER[MAX_LINE_LENGTH+1];
+#define MAX_LINE_LENGTH 192
+typedef char LINE_BUFFER[MAX_LINE_LENGTH];
 
 /* We must declare these as such because CUDA is recognized as C++, a different language. See:
  http://forums.nvidia.com/index.php?showtopic=190973 */
