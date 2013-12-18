@@ -1180,7 +1180,7 @@ void print_time_from_seconds (unsigned in_sec, char *res, int mode)
      if(mode & 1) sprintf (s_time, "%um%02us", min, sec);
      else sprintf (s_time, "%u:%02u", min, sec);
   }
-  if(res) sprintf(res, s_time);
+  if(res) sprintf(res, "%12s", s_time);
   else printf ("%s", s_time);
 }
 
@@ -1243,15 +1243,15 @@ unsigned long long find_residue(int *x_int, int q, int n, int offset)
 
 void printbits(unsigned long long residue, int q, int n, int offset, FILE* fp, int o_f)
 {
-  printf ("/ %d, 0x%016llx,", q, residue);
-  printf (" %dK, %s", n/1024, program);
-  printf (" %dK", n/1024);
   if (fp)
   {
+    printf ("M( %d )C, 0x%016llx,", q, residue);
     fprintf (fp, "M( %d )C, 0x%016llx,", q, residue);
     if(o_f) fprintf(fp, " offset = %d,", offset);
     fprintf (fp, " n = %dK, %s", n/1024, program);
   }
+  else printf ("/ %d, 0x%016llx,", q, residue);
+  printf (" %dK, %s", n/1024, program);
 }
 
 void pack_bits(int *x_int, unsigned *packed_x, int q , int n)
@@ -1309,6 +1309,7 @@ void process_output(int q,
   struct tm *tm_now = NULL;
   int index = 0;
   char buffer[192];
+  char temp [32];
   int i;
   static int header_iter = 0;
 
@@ -1322,8 +1323,9 @@ void process_output(int q,
   strftime(g_output[5], 32, ":%S", tm_now);                            //sec
   strftime(g_output[6], 32, "%y", tm_now);                             //year
   strftime(g_output[7], 32, "%Z", tm_now);                             //time zone
-  sprintf(g_output[8],  "%d", q);                                      //exponent
-  sprintf(g_output[9],  "M%d", q);                                     //Mersenne number
+  sprintf(g_output[8],  "%9d", q);                                      //exponent
+  sprintf(temp,  "M%d", q);
+  sprintf(g_output[9],  "%10s", temp);                                 //Mersenne number
   sprintf(g_output[10], "%5dK", n / 1024);                             //fft, multiple of 1k
   sprintf(g_output[11], "%8d", n);                                     //fft
   sprintf(g_output[12], "%9d", j);                                     //iteration
@@ -1916,6 +1918,12 @@ void memtest(int s, int iter, int device)
   }
   if(s > 3)
   {
+    cudaMemGetInfo(&free_mem, &global_mem);
+    if((size_t) v *1024 * 1024 * 25  > free_mem )
+    {
+      v = free_mem / 1024 / 1024 / 25;
+      printf("Reducing size to %d\n", v);
+    }
     cutilSafeCall (cudaMalloc ((void **) &dev_data2, sizeof (double) * n * v));
     cutilSafeCall (cudaFree ((char *) dev_data1));
     for(j = 0; j < v; j++)
@@ -2587,7 +2595,7 @@ check (int q)
         }
 
         if ( g_ki && !restarting && !g_qu && (!(j & 15)) && _kbhit()) interact_result = interact(n);
-        if(interact_result == 1)
+        if(interact_result & 3)
         {
           if(!(error_flag & 1))
           {
@@ -2595,25 +2603,25 @@ check (int q)
             error_flag |= 1;
             terr = lucas_square (q, n, j, last, &offset, &maxerr, error_flag);
             if(terr <= 0.40)
+            {
+              cutilSafeCall (cudaMemcpy (x_int, g_xint, sizeof (int) * n, cudaMemcpyDeviceToHost));
+              standardize_digits(x_int, q, n, 0, n);
+              gettimeofday (&time1, NULL);
+              diff = time1.tv_sec - time0.tv_sec;
+              diff1 = 1000000 * diff + time1.tv_usec - time0.tv_usec;
+              total_time += diff1;
+              time_adj = total_time;
+              iter_adj = j + 1;
+              set_checkpoint_data(x_packed, q, j + 1, offset, total_time, time_adj, iter_adj);
+              if(interact_result & 1)
               {
-                cutilSafeCall (cudaMemcpy (x_int, g_xint, sizeof (int) * n, cudaMemcpyDeviceToHost));
-                standardize_digits(x_int, q, n, 0, n);
-                gettimeofday (&time1, NULL);
-                diff = time1.tv_sec - time0.tv_sec;
-                diff1 = 1000000 * diff + time1.tv_usec - time0.tv_usec;
-                total_time += diff1;
-                set_checkpoint_data(x_packed, q, j + 1, offset, total_time, total_time, j);
                 pack_bits(x_int, x_packed, q, n);
                 reset_err(&maxerr, 0.0);
                 error_reset = 1;
               }
+            }
           }
-          restarting = 1;
-        }
-        if(interact_result == 2)
-        {
-          time_adj = total_time;
-          iter_adj = j;
+          if(interact_result & 1) restarting = 1;
         }
       }
 	    interact_result = 0;
@@ -2670,7 +2678,8 @@ void parse_args(int argc, char *argv[], int* q, int* cufftbench_s, int* cufftben
 
 void encode_output_options(void)
 {
-  int i = 0, j = 0, k, temp;
+  int i = 0, j = 0, temp;
+  unsigned k;
   char token[196];
   char c;
 
