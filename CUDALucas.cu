@@ -27,7 +27,7 @@ char program[] = "CUDALucas v2.05 Beta";
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cufft.h>
-
+//#include "nvml.h"
 #include "cuda_safecalls.h"
 #include "parse.h"
 
@@ -75,7 +75,7 @@ int g_fft_count = 0;              //number of ffts lengths in g_ffts
 int g_fftlen;                     //index of the fft currently in use
 int g_lbi = 0;                    //index of the smallest feasible fft length for the current exponent
 int g_ubi = 256;                  //index of the largest feasible fft length for the current exponent
-int g_th[3] = {256, 128, 128};    //current threads values
+int g_thr[3] = {256, 128, 128};   //current threads values
 
 int g_cpi;                        //checkpoint interval
 int g_er = 85;                    //error reset value
@@ -89,6 +89,7 @@ int g_dn;                         //device number
 int g_df;                         //show device info flag
 int g_ki;                         //keyboard input flag
 int g_pf;                         //polite flag
+int g_th;                         //threads flag
 
 char g_folder[192];               //folder where savefiles will be kept
 char g_input_file[192];           //input file name default worktodo.txt
@@ -321,7 +322,7 @@ __global__ void rcb1 (double *in,
     mask[0] = -1 << numbits[0];
     mask[1] = -1 << numbits[1];
 
-    // subtact 2 from the appropriated position
+    // subtact 2 from the appropriate position
     if(index == digit) bigint[0] -= bit;
     else if((index + 1) == digit) bigint[1] -= bit;
 
@@ -630,125 +631,109 @@ void init_threads(int n)
   char buf[192];
   char threadfile[32];
   int th0 = 0, th1 = 0, th2 = 0;
-  int temp_n;
-  int i, j, mthe;
+  int temp;
+  int i, j, k;
 
   sprintf (threadfile, "%s threads.txt", g_dev.name);
   threadf = fopen(threadfile, "r");
-  if(threadf)
+  if(threadf && g_th < 0)
   {
     while(fgets(buf, 192, threadf) != NULL)
     {
-      sscanf(buf, "%d %d %d %d", &temp_n, &th0, &th1, &th2);
-      if(n == temp_n * 1024)
+      sscanf(buf, "%d %d %d %d", &temp, &th0, &th1, &th2);
+      if(n == temp * 1024)
       {
-        g_th[0] = th0;
-        g_th[1] = th1;
-        g_th[2] = th2;
+        g_thr[0] = th0;
+        g_thr[1] = th1;
+        g_thr[2] = th2;
       }
     }
     fclose(threadf);
   }
-  mthe = g_dev.maxThreadsPerBlock;
-
-  j = 0;
-  while(mthe)
+  temp = g_dev.maxThreadsPerBlock;
+  k = -1;
+  while(temp)
   {
-    mthe >>= 1;
-    j++;
+    temp >>= 1;
+    k++;
   }
-  mthe = 1 << j;
-  for(i = 0; i < 3; i++)
+  temp = n; //full fft length
+  i = 0; j = 0;
+  while((temp & 1) == 0)
   {
-    th0 = g_th[i];
-    j = 0;
-    while(th0)
-    {
-      th0 >>= 1;
-      j++;
-    }
-    j--;
-    th0 = 1 << j;
-    if(th0 != g_th[i])
-    {
-      printf("threads[%d] = %d must be a power of two, changing to %d.\n", i, g_th[i], th0);
-      g_th[i] = th0;
-    }
-    if(th0 < 32)
-    {
-      printf("threads[%d] must be at least 32, increasing to 32.\n", i);
-      g_th[i] = 32;
-    }
-    if(th0 > mthe)
-    {
-      printf("threads[%d] must be no more than %d, decreasing to %d.\n", i, mthe, mthe);
-      g_th[i] = mthe;
-    }
-  }
-  temp_n = n;
-  i = 0; j = -1;
-  while((temp_n & 1) == 0)
-  {
-    if(temp_n > g_dev.maxGridSize[0]) j = i;
-    temp_n >>= 1;
+    if(temp > g_dev.maxGridSize[0]) j++;
+    temp >>= 1;
     i++;
   }
-  j++;
-  th0 = 1 << i;
-  th0 >>= 1;
-  th1 = 1 << j;
-  th1 >>= 1;
-  if(th0 > mthe) th0 = mthe;
-  if(th1 < 32) th1 = 32;
-  if(th1 > mthe)
+  if(j == i)
   {
-    th2 = 2 * mthe * g_dev.maxGridSize[0];
-    if(th2 < g_ffts[g_lbi]) printf("Can't do that exponent on this device.\n");
-    else
+    while(temp > g_dev.maxGridSize[0])
     {
-      printf("This device can not handle ffts of length %dk.\n", n / 1024);
-      printf("Please restart with an fft length between %dK and %dk\n", g_ffts[g_lbi] / 1024, th2 / 1024);
+      temp >>= 1;
+      j++;
     }
+  }
+  if(j < 6) j = 6;
+  th0 = 1 << (i-1);
+  th1 = 1 << (j-1);
+  temp = 1 << k;
+  if(k < j - 1)
+  {
+    fprintf(stderr, "The fft %dK is too big for this device.\n", n / 1024);
     exit(2);
   }
-  else if (g_th[0] > th0)
+  if (i < j)
   {
-    fprintf (stderr, "fft length %d must be divisible by 2 * threads[0] = %d\n", n,  2 * g_th[0]);
-    printf("Decreasing threads[0] to %d\n", th0);
-    g_th[0] = th0;
-  }
-  else if(g_th[0] < th1)
-  {
-    printf ("fft length / (2 * threads[0]) = %d must be less than the maximum block size = %d\n", n / (2 * g_th[0]), g_dev.maxGridSize[0]);
-    printf("Increasing threads[0] to %d\n", th1);
-    g_th[0] = th1;
-  }
-  th0 = 1 << i;
-  th0 >>= 2;
-  th1 = 1 << j;
-  th1 >>= 2;
-  if(th0 > mthe) th0 = mthe;
-  if(th1 > mthe) th1 = mthe;
-  if(th1 < 32) th1 = 32;
-  if(32 > th0)
-  {
-    printf("An fft of this length %dk must be divisible by %d.\n", n / 1024, 4 * th1);
-    printf("Please restart with an appropriately selected fft length >= %dK.\n", g_ffts[g_lbi] / 1024);
+    fprintf(stderr, "An fft of that size must be divisible by %d\n",(1 << j));
     exit(2);
   }
-  else if (g_th[1] > th0)
+  for(i = 0; i < 3; i++)
   {
-    fprintf (stderr, "fft length %d must be divisible by 4 * threads[1] = %d\n", n,  4 * g_th[1]);
-    printf("Decreasing threads[1] to %d\n", th0);
-    g_th[1] = th0;
+    if (g_thr[i] > temp)
+    {
+      fprintf(stderr, "threads[%d] = %d must be no more than %d, changing to %d.\n", i, g_thr[i], temp, temp);
+      g_thr[i] = temp;
+    }
+    if (g_thr[i] > th0)
+    {
+      fprintf (stderr, "fft length %d must be divisible by %d * threads[%d] = %d\n", n,  2 * i + 2, i, (2 * i + 2) * g_thr[i]);
+      fprintf(stderr, "Decreasing threads[%d] to %d\n", i, th0);
+      g_thr[i] = th0;
+    }
+    if(g_thr[i] < 32)
+    {
+      fprintf(stderr, "threads[%d] = %d must be at least 32, changing to %d.\n", i,  g_thr[i], 32);
+      g_thr[i] = 32;
+    }
+    if(g_thr[i] < th1)
+    {
+      fprintf (stderr, "fft length / (%d * threads[%d]) = %d must be less than the max block size = %d\n",
+                        2 * i + 2, i, n / ((2 * i + 2) * g_thr[0]), g_dev.maxGridSize[0]);
+      fprintf(stderr, "Increasing threads[%d] to %d\n", i, th1);
+      g_thr[i] = th1;
+    }
+    j = 1;
+    while(j < g_thr[i]) j <<= 1;
+    if(j != g_thr[i])
+    {
+      k = j - g_thr[i];
+      if(k > (j >> 2)) j >>= 1;
+      fprintf(stderr, "threads[%d] = %d must be a power of two, changing to %d.\n", i, g_thr[i], j);
+      g_thr[i] = j;
+    }
+    if(i == 0)
+    {
+      th0 >>= 1;
+      if(j > 6) th1 >>= 1;
+    }
+    if(i == 1)
+    {
+      th0 = temp;
+      th1 = 32;
+    }
   }
-  else if(g_th[1] < th1)
-  {
-    fprintf (stderr, "fft length / (4 * threads[1]) = %d must be less than the maximum block size = %d\n", n / (4 * g_th[1]), g_dev.maxGridSize[0]);
-    printf("Increasing threads[1] to %d\n", th1);
-    g_th[1] = th1;
-  }
-  printf("Using threads: norm1 %d, mult %d, norm2 %d.\n", g_th[0], g_th[1], g_th[2]);
+  printf("Using threads: norm1 %d, mult %d, norm2 %d.\n", g_thr[0], g_thr[1], g_thr[2]);
+  fflush(stderr);
   return;
 }
 
@@ -776,12 +761,11 @@ int init_ffts(int new_len)
                             24500, 25088, 25600, 26244, 27000, 27216, 28000, 28672, 31104, 31250,
                             32000, 32400, 32768, 33614, 34992, 36000, 36288, 38416, 39200, 39366,
                             40500, 41472, 42336, 43200, 43904, 47628, 49000, 50000, 50176, 51200,
-                            52488, 54432, 55296, 56000, 57344, 60750, 62500, 64000, 64800, 65536 };
+                            52488, 54432, 55296, 56000, 57344, 60750, 62500, 64000, 64800, 65536};
 
 
   sprintf (fftfile, "%s fft.txt", g_dev.name);
   fft = fopen(fftfile, "r");
-  temp_fft[0] = new_len;
   if(fft)
   {
     while(fgets(buf, 192, fft) != NULL)
@@ -799,7 +783,11 @@ int init_ffts(int new_len)
       }
     }
     fclose(fft);
-    i++;
+  }
+  else
+  {
+    i = 2;
+    temp_fft[1] = new_len;
   }
   while((j < COUNT) && (1024 * default_mult[j] < temp_fft[1]))
   {
@@ -977,7 +965,7 @@ void write_gpu_data(int q, int n)
   cudaMemcpy (g_ct, s_ct, sizeof (double) * (n / 4), cudaMemcpyHostToDevice);
   cufftSafeCall (cufftPlan1d (&g_plan, n / 2, CUFFT_Z2Z, 1));
 
-  b = n * ((g_th[0] >> 5) - 1) / (g_th[0]);
+  b = n * ((g_thr[0] >> 5) - 1) / (g_thr[0]);
   g_ttp1 = &g_x[n / 4 * 9 + b];
 
   free ((char *) s_ct);
@@ -1010,7 +998,7 @@ void init_x(int *x_int, unsigned *x_packed, int q, int n, int *offset)
     }
   }
   cudaMemcpy (g_xint, x_int, sizeof (int) * n , cudaMemcpyHostToDevice);
-  apply_weights <<<n / (2 * g_th[0]), g_th[0]>>> (g_x, g_xint, g_ttmp);
+  apply_weights <<<n / (2 * g_thr[0]), g_thr[0]>>> (g_x, g_xint, g_ttmp);
 }
 
 void unpack_bits(int *x_int, unsigned *packed_x, int q , int n)
@@ -1501,20 +1489,20 @@ float lucas_square (int q, int n, int iter, int last, int* offset, float* maxerr
   bit = 1 << bit;
 
   cufftSafeCall (cufftExecZ2Z (g_plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
-  square <<< n / (4 * g_th[1]), g_th[1] >>> (n, g_x, g_ct);
+  square <<< n / (4 * g_thr[1]), g_thr[1] >>> (n, g_x, g_ct);
   cufftSafeCall (cufftExecZ2Z (g_plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
   if(error_flag & 4)
   {
-    rcb2 <<<n / (2 * g_th[0]), g_th[0] >>>
+    rcb2 <<<n / (2 * g_thr[0]), g_thr[0] >>>
              (g_x, g_xint, (long long *) g_data, g_ttmp, (long long *) g_carry, g_err, *maxerr, digit, bit, error_flag & 1);
-    splice2 <<< (n / (2 * g_th[0]) + g_th[2] - 1) / g_th[2], g_th[2] >>>
-             (g_x, g_xint, n, g_th[0], (long long *) g_data, (long long *) g_carry, g_ttp1, error_flag & 1);
+    splice2 <<< (n / (2 * g_thr[0]) + g_thr[2] - 1) / g_thr[2], g_thr[2] >>>
+             (g_x, g_xint, n, g_thr[0], (long long *) g_data, (long long *) g_carry, g_ttp1, error_flag & 1);
   }
   else
   {
-    rcb1 <<<n / (2 * g_th[0]), g_th[0] >>> (g_x, g_xint, g_data, g_ttmp, g_carry, g_err, *maxerr, digit, bit, error_flag & 1);
-    splice1 <<< (n / (2 * g_th[0]) + g_th[2] - 1) / g_th[2], g_th[2] >>>
-             (g_x, g_xint, n, g_th[0], g_data, g_carry, g_ttp1, error_flag & 1);
+    rcb1 <<<n / (2 * g_thr[0]), g_thr[0] >>> (g_x, g_xint, g_data, g_ttmp, g_carry, g_err, *maxerr, digit, bit, error_flag & 1);
+    splice1 <<< (n / (2 * g_thr[0]) + g_thr[2] - 1) / g_thr[2], g_thr[2] >>>
+             (g_x, g_xint, n, g_thr[0], g_data, g_carry, g_ttp1, error_flag & 1);
   }
   if (error_flag & 3)
   {
@@ -1569,26 +1557,26 @@ void kernel_percentages (int fft, int passes, int device_number)
       {
         if(j == 0)
         {
-         rcb1 <<<n / (2 * g_th[0]), g_th[0] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
+         rcb1 <<<n / (2 * g_thr[0]), g_thr[0] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
         }
         if(j == 1)
         {
-         rcb1 <<<n / (2 * g_th[0]), g_th[0] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
-         splice1 <<< (n / (2 * g_th[0]) + g_th[2] - 1) / g_th[2], g_th[2] >>> (g_x, NULL, n, g_th[0], g_data, g_carry, g_ttp1, 0);
+         rcb1 <<<n / (2 * g_thr[0]), g_thr[0] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
+         splice1 <<< (n / (2 * g_thr[0]) + g_thr[2] - 1) / g_thr[2], g_thr[2] >>> (g_x, NULL, n, g_thr[0], g_data, g_carry, g_ttp1, 0);
         }
         if(j == 2)
         {
-         square <<< n / (4 * g_th[1]), g_th[1] >>> (n, g_x, g_ct);
-         rcb1 <<<n / (2 * g_th[0]), g_th[0] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
-         splice1 <<< (n / (2 * g_th[0]) + g_th[2] - 1) / g_th[2], g_th[2] >>> (g_x, NULL, n, g_th[0], g_data, g_carry, g_ttp1, 0);
+         square <<< n / (4 * g_thr[1]), g_thr[1] >>> (n, g_x, g_ct);
+         rcb1 <<<n / (2 * g_thr[0]), g_thr[0] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
+         splice1 <<< (n / (2 * g_thr[0]) + g_thr[2] - 1) / g_thr[2], g_thr[2] >>> (g_x, NULL, n, g_thr[0], g_data, g_carry, g_ttp1, 0);
         }
         if(j == 3)
         {
          cufftSafeCall (cufftExecZ2Z (g_plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
-         square <<< n / (4 * g_th[1]), g_th[1] >>> (n, g_x, g_ct);
+         square <<< n / (4 * g_thr[1]), g_thr[1] >>> (n, g_x, g_ct);
          cufftSafeCall (cufftExecZ2Z (g_plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
-         rcb1 <<<n / (2 * g_th[0]), g_th[0] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
-         splice1 <<< (n / (2 * g_th[0]) + g_th[2] - 1) / g_th[2], g_th[2] >>> (g_x, NULL, n, g_th[0], g_data, g_carry, g_ttp1, 0);
+         rcb1 <<<n / (2 * g_thr[0]), g_thr[0] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
+         splice1 <<< (n / (2 * g_thr[0]) + g_thr[2] - 1) / g_thr[2], g_thr[2] >>> (g_x, NULL, n, g_thr[0], g_data, g_carry, g_ttp1, 0);
         }
       }
       cutilSafeCall (cudaEventRecord (stop, 0));
@@ -1607,15 +1595,15 @@ void kernel_percentages (int fft, int passes, int device_number)
       {
         if(j == 0)
         {
-         rcb1 <<<n / (2 * g_th[0]), g_th[0] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
+         rcb1 <<<n / (2 * g_thr[0]), g_thr[0] >>> (g_x, NULL, g_data, g_ttmp, g_carry, g_err, maxerr, 0, 0, 0);
         }
         if(j == 1)
         {
-         splice1 <<< (n / (2 * g_th[0]) + g_th[2] - 1) / g_th[2], g_th[2] >>> (g_x, NULL, n, g_th[0], g_data, g_carry, g_ttp1, 0);
+         splice1 <<< (n / (2 * g_thr[0]) + g_thr[2] - 1) / g_thr[2], g_thr[2] >>> (g_x, NULL, n, g_thr[0], g_data, g_carry, g_ttp1, 0);
         }
         if(j == 2)
         {
-         square <<< n / (4 * g_th[1]), g_th[1] >>> (n, g_x, g_ct);
+         square <<< n / (4 * g_thr[1]), g_thr[1] >>> (n, g_x, g_ct);
         }
         if(j == 3)
         {
@@ -1858,13 +1846,13 @@ void memtest(int s, int iter, int device)
 
   alloc_gpu_mem(n);
   write_gpu_data(q, n);
-  apply_weights <<<n / (2 * g_th[0]), g_th[0]>>> (g_x, g_xint, g_ttmp);
+  apply_weights <<<n / (2 * g_thr[0]), g_thr[0]>>> (g_x, g_xint, g_ttmp);
   d_data = (double *) malloc (sizeof (double) * n * 5);
   cudaMemcpy (d_data, g_ttmp, sizeof (double) * n, cudaMemcpyDeviceToHost);
   cudaMemcpy (&d_data[n], g_x, sizeof (double) * n, cudaMemcpyDeviceToHost);
   cufftSafeCall (cufftExecZ2Z (g_plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
   cudaMemcpy (&d_data[2 * n], g_x, sizeof (double) * n, cudaMemcpyDeviceToHost);
-  square <<< n / (4 * g_th[1]), g_th[1] >>> (n, g_x, g_ct);
+  square <<< n / (4 * g_thr[1]), g_thr[1] >>> (n, g_x, g_ct);
   cudaMemcpy (&d_data[3 * n], g_x, sizeof (double) * n, cudaMemcpyDeviceToHost);
   cufftSafeCall (cufftExecZ2Z (g_plan, (cufftDoubleComplex *) g_x, (cufftDoubleComplex *) g_x, CUFFT_INVERSE));
   cudaMemcpy (&d_data[4 * n], g_x, sizeof (double) * n, cudaMemcpyDeviceToHost);
@@ -2384,6 +2372,15 @@ check (int q)
   int fft_reset = 0;
   int error_flag;
   int error_reset = 1;
+  //char version[80] = {0};
+  //unsigned int temp = 0;
+  //unsigned int speed = 0;
+  //nvmlDevice_t device1;
+  //nvmlUtilization_t utilization;
+
+  //nvmlInit();
+  //nvmlDeviceGetHandleByIndex (0, &device1);
+  //nvmlSystemGetDriverVersion (version, 80);
 
   signal (SIGTERM, SetQuitting);
   signal (SIGINT, SetQuitting);
@@ -2483,7 +2480,11 @@ check (int q)
                 print_time_from_seconds ((unsigned) diff2, NULL, 0);
                 printf (", %5.2f%%\n", (float) j/q*100);
               }
-              fflush (stdout);
+   //nvmlDeviceGetTemperature (device1,NVML_TEMPERATURE_GPU, &temp);
+  //nvmlDeviceGetFanSpeed (device1, &speed);
+ // nvmlDeviceGetUtilizationRates (device1, &utilization);
+ //printf("%s, %u %u %u %u\n", version, temp, speed, utilization.gpu, utilization.memory);
+             fflush (stdout);
               last_chk = j;
               if(!error_reset) reset_err(&maxerr, g_er / 100.0f); // Instead of tracking maxerr over whole run, reset it at each checkpoint.
               if(fft_reset) // Larger fft fixed the error, reset fft and continue
@@ -2669,6 +2670,8 @@ check (int q)
   }
   while (restarting);
   free ((char *) x_packed);
+  x_packed = NULL;
+  //nvmlShutdown();
   return (0);
 }
 
@@ -2877,9 +2880,6 @@ void process_options(void)
 
   char fft_str[192] = "\0";
 
-  g_cpi = g_er = g_th[0] = g_fftlen = g_pf = g_po = g_sf = g_df = g_ki = g_ro = -1;
-  g_output_string[0] = g_output_header[0] = g_output_interval = -1;
-  g_AID[0] = g_input_file[0] = g_RESULTSFILE[0] = 0; /* First character is null terminator */
 
   if (file_exists(g_INIFILE))
   {
@@ -2901,7 +2901,7 @@ void process_options(void)
       /*fprintf(stderr, "Warning: Couldn't parse ini file option CheckpointIterations; using default: %d\n", CHECKPOINT_ITER_DFLT)*/;
     if( g_er < 0 &&           !IniGetInt(g_INIFILE, "ErrorReset", &g_er, ER_DFLT) )
       /*fprintf(stderr, "Warning: Couldn't parse ini file option ErrorReset using default: 85\n")*/;
-    if( g_th[0] < 1 &&        !IniGetInt3(g_INIFILE, "Threads", &g_th[0], &g_th[1], &g_th[2], THREADS_DFLT) )
+    if( g_th < 0 &&        !IniGetInt3(g_INIFILE, "Threads", &g_thr[0], &g_thr[1], &g_thr[2], THREADS_DFLT) )
       /*fprintf(stderr, "Warning: Couldn't parse ini file option Threads; using default: 256 128 128%d\n", THREADS_DFLT)*/;
     if( g_fftlen < 0 &&       !IniGetStr(g_INIFILE, "FFTLength", fft_str, "\0") )
       /*fprintf(stderr, "Warning: Couldn't parse ini file option FFTLength; using autoselect.\n")*/;
@@ -2921,7 +2921,7 @@ void process_options(void)
   {
     fprintf(stderr, "Warning: Couldn't find .ini file. Using defaults for non-specified options.\n");
     if( g_cpi < 1 ) g_cpi = CHECKPOINT_ITER_DFLT;
-    if( g_th[0] < 1 ) g_th[0] = THREADS_DFLT;
+    if( g_thr[0] < 1 ) g_thr[0] = THREADS_DFLT;
     if( g_fftlen < 0 ) g_fftlen = 0;
     if( g_sf < 0 ) g_sf = S_F_DFLT;
     if( g_ki < 0 ) g_ki = K_F_DFLT;
@@ -2943,6 +2943,7 @@ void process_options(void)
   }
   else g_pf = 1;
   encode_output_options();
+
 }
 
 void make_savefile_folder(void)
@@ -2963,7 +2964,11 @@ int main (int argc, char *argv[])
   int cufftbench_s, cufftbench_e, cufftbench_d;
 
   printf("\n");
+
   cufftbench_s = cufftbench_e = cufftbench_d = g_rt = 0;
+  g_cpi = g_er = g_thr[0] = g_fftlen = g_pf = g_po = g_sf = g_df = g_ki = g_ro = g_th = -1;
+  g_output_string[0] = g_output_header[0] = g_output_interval = -1;
+  g_AID[0] = g_input_file[0] = g_RESULTSFILE[0] = 0; /* First character is null terminator */
 
   parse_args(argc, argv, &q, &cufftbench_s, &cufftbench_e, &cufftbench_d); // The rest of the args are globals
   process_options();
@@ -3117,13 +3122,14 @@ void parse_args(int argc,
 	      fprintf (stderr, "can't parse -threads option\n\n");
 	      exit (2);
 	    }
-	    g_th[0] = atoi (argv[2]);
-	    g_th[1] = atoi (argv[3]);
-	    g_th[2] = atoi (argv[4]);
+	    g_th = 0;
+      g_thr[0] = atoi (argv[2]);
+	    g_thr[1] = atoi (argv[3]);
+	    g_thr[2] = atoi (argv[4]);
 	    argv += 4;
 	    argc -= 4;
 	  }
-    else if (strcmp (argv[1], "-c") == 0) // checpoint iteration
+    else if (strcmp (argv[1], "-c") == 0) // checkpoint iteration
 	  {
 	    if (argc < 3 || argv[2][0] == '-')
 	    {
@@ -3147,7 +3153,7 @@ void parse_args(int argc,
 	      exit (2);
 	    }
 	    g_fftlen = fft_from_str(argv[2]);
-	    argv += 2;
+      argv += 2;
 	    argc -= 2;
 	  }
     else if (strcmp (argv[1], "-s") == 0)
@@ -3220,45 +3226,45 @@ int interact(int n)
                 return 1;
     case 'Q' :
                 cutilSafeThreadSync();
-                if(g_th[0] < max_threads && (n % (4 * g_th[0]) == 0)) g_th[0] *= 2;
+                if(g_thr[0] < max_threads && (n % (4 * g_thr[0]) == 0)) g_thr[0] *= 2;
                 l = 0;
                 k = 32;
-                while(k < g_th[0])
+                while(k < g_thr[0])
                 {
                   l += n / (2 * k);
                   k *= 2;
                 }
                 g_ttp1 = &g_x[n / 4 * 9 + l];
-                printf(" -- norm1 threads increased to %d.\n", g_th[0]);
+                printf(" -- norm1 threads increased to %d.\n", g_thr[0]);
                 break;
     case 'q' :
                 cutilSafeThreadSync();
-                if(g_th[0] > 32 && (n / g_th[0] <= g_dev.maxGridSize[0])) g_th[0] /= 2;
+                if(g_thr[0] > 32 && (n / g_thr[0] <= g_dev.maxGridSize[0])) g_thr[0] /= 2;
                 l = 0;
                 k = 32;
-                while(k < g_th[0])
+                while(k < g_thr[0])
                 {
                   l += n / (2 * k);
                   k *= 2;
                 }
                 g_ttp1 = &g_x[n / 4 * 9 + l];
-                printf(" -- norm1 threads decreased to %d.\n", g_th[0]);
+                printf(" -- norm1 threads decreased to %d.\n", g_thr[0]);
                 break;
     case 'W' :
-                if(g_th[1] < max_threads&& (n % (8 * g_th[1]) == 0)) g_th[1] *= 2;
-                printf(" -- mult threads increased to %d.\n", g_th[1]);
+                if(g_thr[1] < max_threads&& (n % (8 * g_thr[1]) == 0)) g_thr[1] *= 2;
+                printf(" -- mult threads increased to %d.\n", g_thr[1]);
                 break;
     case 'w' :
-                if(g_th[1] > 32 && (n / ( 2 * g_th[1]) <= g_dev.maxGridSize[0])) g_th[1] /= 2;
-                printf(" -- mult threads decreased to %d.\n", g_th[1]);
+                if(g_thr[1] > 32 && (n / ( 2 * g_thr[1]) <= g_dev.maxGridSize[0])) g_thr[1] /= 2;
+                printf(" -- mult threads decreased to %d.\n", g_thr[1]);
                 break;
     case 'E' :
-                if(g_th[2] < max_threads) g_th[2] *= 2;
-                printf(" -- norm2 threads increased to %d.\n", g_th[2]);
+                if(g_thr[2] < max_threads) g_thr[2] *= 2;
+                printf(" -- norm2 threads increased to %d.\n", g_thr[2]);
                 break;
     case 'e' :
-                if(g_th[2] > 32) g_th[2] /= 2;
-                printf(" -- norm2 threads decreased to %d.\n", g_th[2]);
+                if(g_thr[2] > 32) g_thr[2] /= 2;
+                printf(" -- norm2 threads decreased to %d.\n", g_thr[2]);
                 break;
     case 'R' :
                 if(g_er < 100) g_er += 5;
