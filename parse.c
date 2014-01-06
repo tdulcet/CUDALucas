@@ -179,16 +179,27 @@ returns 1 if the assignment is within the supported bounds of CUDALucas,
 0 otherwise.
 */
 {
-  int ret = 1;
-
 	// Perhaps add a largest exponent?
-	if(exp < 7000)       {ret = 0; fprintf(stderr, "Warning: exponents < 7000 are not supported!\n");}
-	if(!isprime(exp))     {ret = 0; fprintf(stderr, "Warning: exponent is not prime!\n");}
-	if(fftlen % (256))   {ret = 0; fprintf(stderr, "Warning: FFT length %d is invalid, it must be a multiple of 256. See CUDALucas.ini for more details about good lengths.\n", fftlen);}
+	if(exp < 7000)
+  {
+    fprintf(stderr, "Warning: exponents < 7000 are not supported!\n");
+    return 0;
+	}
+	if(fftlen % (1024))
+  {
+    fprintf(stderr, "Warning: FFT length %d is invalid, it must be a multiple of 1024. See CUDALucas.ini for more details about good lengths.\n",
+            fftlen);
+    return 0;
+  }
+  if(!isprime(exp))
+  {
+    fprintf(stderr, "Warning: exponent is not prime!\n");
+    return -1;
+  }
 	// This doesn't guarantee that it *is* valid, but it will catch horribly bad lengths.
 	// (To do more checking, we'd need access the "threads" variable from CUDALucas.cu.)
 
-  return ret;
+  return 1;
 }
 
 enum ASSIGNMENT_ERRORS
@@ -504,7 +515,7 @@ enum ASSIGNMENT_ERRORS get_next_assignment(char *filename, int *exponent, int* f
       continue;
     if (NO_WARNING == value)
     {
-      if (valid_assignment(assignment.exponent, assignment.fft_length))
+      if (valid_assignment(assignment. exponent, assignment. fft_length) > 0)
         break;
       value = INVALID_DATA;
     }
@@ -688,7 +699,7 @@ int IniGetInt(char *inifile, char *name, int *value, int dflt)
   error: *value = dflt; return 0;
 }
 
-int IniGetInt3(char *inifile, char *name, int *value, int *value1, int *value2, int dflt)
+int IniGetInt2(char *inifile, char *name, int *value0, int *value1, int dflt)
 {
   FILE *in;
   char buf[MAX_LINE_LENGTH];
@@ -699,12 +710,31 @@ int IniGetInt3(char *inifile, char *name, int *value, int *value1, int *value2, 
   {
     if(!strncmp(buf,name,strlen(name)) && buf[strlen(name)]=='=')
     {
-      if(sscanf(&(buf[strlen(name)+1]),"%d %d %d",value, value1, value2)==3)found=1;
+      if(sscanf(&(buf[strlen(name)+1]),"%d %d",value0, value1)==2)found=1;
     }
   }
   fclose(in);
   if(found) return 1;
-  error: *value = dflt; return 0;
+  error: *value0 = dflt; return 0;
+}
+
+int IniGetInt3(char *inifile, char *name, int *value0, int *value1, int *value2, int dflt)
+{
+  FILE *in;
+  char buf[MAX_LINE_LENGTH];
+  int found=0;
+  in=_fopen(inifile,"r");
+  if(!in) goto error;
+  while(fgets(buf,MAX_LINE_LENGTH-1,in) && !found)
+  {
+    if(!strncmp(buf,name,strlen(name)) && buf[strlen(name)]=='=')
+    {
+      if(sscanf(&(buf[strlen(name)+1]),"%d %d %d",value0, value1, value2)==3)found=1;
+    }
+  }
+  fclose(in);
+  if(found) return 1;
+  error: *value0 = dflt; return 0;
 }
 
 int IniGetStr(char *inifile, char *name, char *string, char* dflt)
