@@ -1314,8 +1314,8 @@ int *init_lucas(unsigned *x_packed,
   *n = choose_fft_length(q, &g_fftlen);
   if(*n != (int) x_packed[end + 1])
   {
-    *time_adj = *total_time;
-    if(*j > 1) *iter_adj = *j;
+    if(time_adj) *time_adj = *total_time;
+    if(*j > 1 && iter_adj) *iter_adj = *j;
   }
   //printf("time_adj: %llu, iter_adj: %u\n", *time_adj, *iter_adj);
   init_threads(*n);
@@ -1658,7 +1658,7 @@ unsigned *read_checkpoint(int q)
   for(i = 0; i < 10; i++) x_packed[end + i] = 0;
   x_packed[end + 2] = 1;
   x_packed[end + 3] = (unsigned) -1;
-  if(0 < g_rt) return(x_packed);
+  if(0 <= g_rt) return(x_packed);
 
   sprintf (chkpnt_cfn, "c%d", q);
   sprintf (chkpnt_tfn, "t%d", q);
@@ -2823,7 +2823,7 @@ check (int q)
             diff = time1.tv_sec - time0.tv_sec;
             diff1 = 1000000 * diff + time1.tv_usec - time0.tv_usec;
             total_time += diff1;
-            diff2 = (total_time - time_adj) * (last - j) / (j - iter_adj) / 1000000;
+            diff2 = (unsigned long long) (total_time - time_adj) / 1000000.0 * (last - j) / (j - iter_adj);
             time0.tv_sec = time1.tv_sec;
             time0.tv_usec = time1.tv_usec;
             if(j % g_cpi == 0 || g_qu)
@@ -3343,7 +3343,7 @@ int main (int argc, char *argv[])
       {
         g_fftlen = f_f; // fftlen and AID change between tests, so be sure to reset them
         g_AID[0] = 0;
-        if(!get_next_assignment(g_input_file, &q, &g_fftlen, &g_AID) || q < 0) exit (2);
+        if(get_next_assignment(g_input_file, &q, &g_fftlen, &g_AID) || q < 0) exit (2);
         check (q);
         if(!g_qu && clear_assignment(g_input_file, q)) exit (2);
       } while(!g_qu);
