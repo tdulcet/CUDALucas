@@ -2094,7 +2094,7 @@ void threadbench (int st_fft, int end_fft, int passes, int mode, int device_numb
 
   while(fft <= n)
   {
-    if(isReasonable(fft) <= 1 && fft <= 1024 * g_dev.maxGridSize[0] && fft % 1024 == 0)
+    if(isReasonable(fft) <= 1 && fft / 1024 <= g_dev.maxGridSize[0] && fft % 1024 == 0)
     {
       cufftSafeCall (cufftPlan1d (&g_plan, fft / 2, CUFFT_Z2Z, 1));
       for(k = 0; k < 2; k++)
