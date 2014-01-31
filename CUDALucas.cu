@@ -59,8 +59,7 @@ double *g_ttp2;                   //weighting factors for splicing step
 double *g_ct;                     //factors used in multiplication kernel enabling real as complex
 int    *g_data;                   //integer values of data for splicing step
 int    *g_carry;                  //carry data for splicing step
-long long int    *g_datal;                   //integer values of data for splicing step
-long long int    *g_carryl;                  //carry data for splicing step
+long long int    *g_carryl;       //carry data for splicing step, 64 bit version
 int    *g_xint;                   //integer copy of gpu data for transfer to cpu
 float  *g_err;                    //current maximum error
 double *g_ttp;                    //weighting factors
@@ -79,13 +78,15 @@ int g_fftlen;                     //index of the fft currently in use
 int g_lbi = 0;                    //index of the smallest feasible fft length for the current exponent
 int g_ubi = 256;                  //index of the largest feasible fft length for the current exponent
 int g_thr[2] = {256, 128};        //current threads values
-int g_txint[10];
 int g_cpi;                        //checkpoint interval
 int g_ri;                         //report interval
 int g_ei;                         //error check interval
 int g_er = 85;                    //error reset value
+int g_pf;                         //polite flag
 int g_po;                         //polite value
-int g_bc;
+int g_sl;                         //polite value
+int g_sv;                         //polite flag
+int g_bc;                         //big carry flag
 int g_qu;                         //quitting flag
 int g_sf;                         //safe all checkpoint files flag
 int g_rt;                         //residue check flag
@@ -93,8 +94,8 @@ int g_ro;                         //roundoff test flag
 int g_dn;                         //device number
 int g_df;                         //show device info flag
 int g_ki;                         //keyboard input flag
-int g_pf;                         //polite flag
 int g_th;                         //threads flag
+int g_el;                         //error limit value
 
 char g_folder[192];               //folder where savefiles will be kept
 char g_input_file[192];           //input file name default worktodo.txt
@@ -308,11 +309,6 @@ __global__ void   rcb (double *in,
 		                   float maxerr,
 		                   int digit,
 		                   int bit)
-// Combine data and carry
-// ittp_col, ittmp_col, ittp_grp, and ittmp_grp
-// 0-31     32-63       64-95     96-128
-//                      128-159   160-191, etc
-// s, s1
 {
     long long int bigint;
     int val, numbits, mask, shifted_carry;
@@ -904,7 +900,7 @@ int init_ffts(int new_len)
   char fftfile[32];
   int next_fft, j = 0, i = 0, k = 1;
   int temp_fft[256] = {0};
-  int default_mult[COUNT] = {  //this batch from GTX570 timings
+  int default_mult[COUNT] = {  //this batch from GTX570 timings, at least up to 16384
                                 1, 2,  4,  8,  10,  14,    16,    18,    20,    32,    36,    42,
                                48,    50,    56,    60,    64,    70,    80,    84,    96,   112,
                               120,   126,   128,   144,   160,   162,   168,   180,   192,   224,
@@ -923,6 +919,7 @@ int init_ffts(int new_len)
                             52488, 54432, 55296, 56000, 57344, 60750, 62500, 64000, 64800, 65536};
 
 
+  //read fft.txt into temp array, inserting new_len appropriately
   sprintf (fftfile, "%s fft.txt", g_dev.name);
 	fft = fopen_and_lock(fftfile, "r");
   if(fft)
@@ -948,11 +945,13 @@ int init_ffts(int new_len)
     i = 1;
     temp_fft[1] = new_len;
   }
+  //put default values less than smallest entry in fft.txt into fft array
   while((j < COUNT) && (1024 * default_mult[j] < temp_fft[1]))
   {
     g_ffts[j] = default_mult[j] << 10;
     j++;
   }
+  //put saved fft.txt values into fft array
   while(k <= i && j < 256)
   {
     g_ffts[j] = temp_fft[k];
@@ -961,6 +960,7 @@ int init_ffts(int new_len)
   }
   k = 0;
   if (j) while(k < COUNT && default_mult[k] * 1024 <= g_ffts[j - 1]) k++;
+  //put default values bigger than largest entry in fft.txt into fft array
   while(k < COUNT && j < 256)
   {
     g_ffts[j] = default_mult[k] << 10;
@@ -1578,8 +1578,8 @@ void process_output(int q,
   sprintf(g_output[27], "%10.5f", diff1 / 1000000.0 );                 //time since last checkpoint xxx.xxxxx seconds format
   sprintf(g_output[28], "%10.5f", (j - last_chk) * 1000000.0 / diff1); //iter/sec
   sprintf(g_output[29], "%10.5f", j / (float) (q - 2) * 100 );         //percent done
-  print_time_from_seconds(diff, g_output[16], 0);                      //time since last checkpoint hh:mm:ss format
-  print_time_from_seconds(diff2, g_output[17], 2);                     //ETA in d:hh:mm:ss format
+  print_time_from_seconds((unsigned) diff, g_output[16], 0);                      //time since last checkpoint hh:mm:ss format
+  print_time_from_seconds((unsigned) diff2, g_output[17], 2);                     //ETA in d:hh:mm:ss format
 
   i = 0;
   while( i < 50 && g_output_code[i] >= 0)
@@ -1878,8 +1878,13 @@ float lucas_square (int q, int n, int iter, int last, int* offset, float* maxerr
   {
     err = cutilSafeCall1 (cudaMemcpy (&terr, g_err, sizeof (float), cudaMemcpyDeviceToHost));
     if(terr > *maxerr) *maxerr = terr;
+    //if( g_pf && g_sl) usleep(g_sv);//, nanosleep sleep(1);
   }
-  else if (g_pf && (iter % g_po) == 0) err = cutilSafeThreadSync();
+  else if (g_pf && (iter % g_po) == 0)
+  {
+    err = cutilSafeThreadSync();
+    //if(g_sl) usleep(g_sv);//, nanosleep sleep(1);
+  }
   if(err != cudaSuccess) terr = -1.0f;
   return (terr);
 }
@@ -2094,14 +2099,14 @@ void threadbench (int st_fft, int end_fft, int passes, int mode, int device_numb
 
   while(fft <= n)
   {
-    if(isReasonable(fft) <= 1 && fft / 1024 <= g_dev.maxGridSize[0] && fft % 1024 == 0)
+    if(isReasonable(fft) <= 1 && fft <= 1024 * g_dev.maxGridSize[0] && fft % 1024 == 0)
     {
       cufftSafeCall (cufftPlan1d (&g_plan, fft / 2, CUFFT_Z2Z, 1));
       for(k = 0; k < 2; k++)
       {
         for (t = s[k]; t < e[k]; t++)
         {
-          if(k == 1 || (fft / (4 * th[t]) <= g_dev.maxGridSize[0] && fft % (4 * th[t]) == 0))
+          if(k == 1 || (fft <= 4 * th[t] * g_dev.maxGridSize[0] && fft % (4 * th[t]) == 0))
           {
             if(k == 0) t0 = t;
             else t1 = t;
@@ -2738,22 +2743,23 @@ check (int q)
 {
   int  *x_int = NULL;
   unsigned *x_packed = NULL;
-  int n, j, last = q - 2;
-  int offset;
+  int n, j, j_b, last = q - 2;
+  int offset, o_b;
   float maxerr, temperr, terr = 0.0f;
   int interact_result = 0;
   timeval time0, time1;
-  unsigned long long total_time = 0, diff, diff1, diff2;
-  unsigned long long time_adj = 0;
+  unsigned long long total_time = 0, tt_b = 0, diff, diff1, diff2;
+  unsigned long long time_adj = 0, ta_b= 0;
   unsigned long long residue;
-  unsigned iter_adj = 0;
+  unsigned iter_adj = 0, ia_b = 0;
   int last_chk = 0;
   int restarting;
-  int retry;
+  int retry = 1;
   int fft_reset = 0;
   int error_flag;
   int error_reset = 1;
-
+  int end = (q + 31) / 32;
+  float error_limit = (g_el - g_el / 8.0 * log (g_ei)/ log(100.0)) / 100.0;
   signal (SIGTERM, SetQuitting);
   signal (SIGINT, SetQuitting);
   do
@@ -2763,6 +2769,11 @@ check (int q)
     if(!x_packed) x_packed = read_checkpoint(q);
     x_int = init_lucas(x_packed, q, &n, &j, &offset, &total_time, &time_adj, &iter_adj);
     if(!x_int) exit (2);
+    j_b = j - 1;
+    o_b = offset;
+    tt_b = total_time;
+    ta_b = time_adj;
+    ia_b = iter_adj;
 
     restarting = 0;
     if(j == 1)
@@ -2775,6 +2786,10 @@ check (int q)
         if(!restarting)
         {
           cutilSafeCall (cudaMemcpy (x_int, g_xint, sizeof (int) * n, cudaMemcpyDeviceToHost));
+          j_b = j - 1;
+          o_b = offset;
+          tt_b = total_time;
+          ia_b = iter_adj;
           set_checkpoint_data(x_packed, q, j, offset, total_time, time_adj, iter_adj);
           standardize_digits(x_int, q, n);
           pack_bits(x_int, x_packed, q, n);
@@ -2800,6 +2815,12 @@ check (int q)
       terr = lucas_square (q, n, j, last, &offset, &maxerr, error_flag);
       if(terr < 0.0f)  //Nvidia, cufft error
       {
+        if(j_b + 1 != (int) x_packed[end + 2]);
+        {
+          set_checkpoint_data(x_packed, q, j_b + 1, o_b, tt_b, ta_b, ia_b);
+          standardize_digits(x_int, q, n);
+          pack_bits(x_int, x_packed, q, n);
+        }
         printf("Resetting device and restarting from last checkpoint.\n\n");
         cudaDeviceReset();
         init_device(g_dn, 0);
@@ -2815,7 +2836,7 @@ check (int q)
             error_flag = 1;
             terr = lucas_square (q, n, j, last, &offset, &maxerr, error_flag);
           }
-          if(terr <= 0.4f)
+          if(terr <= error_limit)
           {
             cutilSafeCall (cudaMemcpy (x_int, g_xint, sizeof (int) * n, cudaMemcpyDeviceToHost));
             residue = find_residue(x_int, q, n, offset);
@@ -2826,6 +2847,11 @@ check (int q)
             diff2 = (unsigned long long) (total_time - time_adj) / 1000000.0 * (last - j) / (j - iter_adj);
             time0.tv_sec = time1.tv_sec;
             time0.tv_usec = time1.tv_usec;
+            j_b = j;
+            o_b = offset;
+            tt_b = total_time;
+            ta_b = time_adj;
+            ia_b = iter_adj;
             if(j % g_cpi == 0 || g_qu)
             {
               set_checkpoint_data(x_packed, q, j + 1, offset, total_time, time_adj, iter_adj);
@@ -2858,34 +2884,40 @@ check (int q)
               if(!error_reset) reset_err(&maxerr, g_er / 100.0f); // Instead of tracking maxerr over whole run, reset it at each checkpoint.
               if(fft_reset) // Larger fft fixed the error, reset fft and continue
               {
+                if(j % g_cpi)
+                {
+                  set_checkpoint_data(x_packed, q, j + 1, offset, total_time, time_adj, iter_adj);
+                  standardize_digits(x_int, q, n);
+                  pack_bits(x_int, x_packed, q, n);
+                }
                 g_fftlen--;
                 restarting = 1;
                 printf("Resettng fft.\n\n");
                 fft_reset = 0;
                 retry = 1;
               }
-              if(retry == 1) // Retrying fixed the error
+              else if(retry == 0) // Retrying fixed the error
               {
                 printf("Looks like the error went away, continuing.\n\n");
-                retry = 0;
+                retry = 1;
               }
             }
           }
         }
       }
-      if (terr > 0.4f)
+      if (terr > error_limit)
       {
-        printf ("Round off error at iteration = %d, err = %0.5g > 0.40, fft = %dK.\n", j,  terr, n / 1024);
+        printf ("Round off error at iteration = %d, err = %0.5g > %0.5g, fft = %dK.\n", j,  terr, error_limit, n / 1024);
         if(g_fftlen >= g_ubi) // fft is at upper bound. overflow errors possible
         {
           printf("Something is wrong! Quitting.\n\n");
           exit (2);
         }
-        else if(g_fftlen <= g_lbi) // fft is at lower bound, round off errors possible
-        {
-          printf("Increasing fft and restarting from last checkpoint.\n\n");
-          g_fftlen++;
-        }
+        //else if(g_fftlen <= g_lbi) // fft is at lower bound, round off errors possible
+        //{
+        //  printf("Increasing fft and restarting from last checkpoint.\n\n");
+        //  g_fftlen++;
+        //}
         else // fft is not a boundary case
         {
           if(retry)  // Redo from last checkpoint, the more complete rounding/balancing
@@ -2909,6 +2941,12 @@ check (int q)
             }
           }
         }
+        if(j_b + 1 != (int) x_packed[end + 2]);
+        {
+          set_checkpoint_data(x_packed, q, j_b + 1, o_b, tt_b, ta_b, ia_b);
+          standardize_digits(x_int, q, n);
+          pack_bits(x_int, x_packed, q, n);
+        }
         restarting = 1;
         reset_err(&maxerr, 0.25);
         error_reset = 1;
@@ -2926,30 +2964,39 @@ check (int q)
       if ( g_ki && !restarting && !g_qu && (!(j & 15)) && _kbhit()) interact_result = interact(n);
       if(interact_result & 3)
       {
-        if(!(error_flag & 1))
+        if(fft_reset) fft_reset = 0;
+        else
         {
-          j++;
-          error_flag |= 1;
-          terr = lucas_square (q, n, j, last, &offset, &maxerr, error_flag);
-          if(terr <= 0.40)
+          if(!(error_flag & 1))
           {
-            cutilSafeCall (cudaMemcpy (x_int, g_xint, sizeof (int) * n, cudaMemcpyDeviceToHost));
-            gettimeofday (&time1, NULL);
-            diff = time1.tv_sec - time0.tv_sec;
-            diff1 = 1000000 * diff + time1.tv_usec - time0.tv_usec;
-            total_time += diff1;
-            time_adj = total_time;
-            iter_adj = j + 1;
-            set_checkpoint_data(x_packed, q, j + 1, offset, total_time, time_adj, iter_adj);
-            standardize_digits(x_int, q, n);
-            pack_bits(x_int, x_packed, q, n);
-            reset_err(&maxerr, g_er / 100.0f);
-            error_reset = 1;
+            j++;
+            error_flag |= 1;
+            terr = lucas_square (q, n, j, last, &offset, &maxerr, error_flag);
+            if(terr <= error_limit)
+            {
+              cutilSafeCall (cudaMemcpy (x_int, g_xint, sizeof (int) * n, cudaMemcpyDeviceToHost));
+              gettimeofday (&time1, NULL);
+              diff = time1.tv_sec - time0.tv_sec;
+              diff1 = 1000000 * diff + time1.tv_usec - time0.tv_usec;
+              total_time += diff1;
+              time_adj = total_time;
+              iter_adj = j + 1;
+              set_checkpoint_data(x_packed, q, j + 1, offset, total_time, time_adj, iter_adj);
+              standardize_digits(x_int, q, n);
+              pack_bits(x_int, x_packed, q, n);
+              reset_err(&maxerr, g_er / 100.0f);
+              error_reset = 1;
+            }
           }
+          if(interact_result & 1) restarting = 1;
         }
-        if(interact_result & 1) restarting = 1;
       }
-	    interact_result = 0;
+	    else if (interact_result & 4)
+      {
+        error_limit = (g_el - g_el / 8.0 * log (g_ei)/ log(100.0)) / 100.0;
+        //printf("%0.5f\n", error_limit);
+      }
+      interact_result = 0;
 	    fflush (stdout);
 	  } /* end main LL for-loop */
 
@@ -3205,8 +3252,11 @@ void process_options(void)
 #define S_F_DFLT 0
 #define K_F_DFLT 0
 #define D_F_DFLT 0
+#define SLEEP_FLAG_DFLT 0
+#define SLEEP_VALUE_DFLT 100
 #define ROT_F_DFLT 0
-#define POLITE_DFLT 1
+#define POLITE_FLAG_DFLT 0
+#define POLITE_VALUE_DFLT 1
 #define WORKFILE_DFLT "worktodo.txt"
 #define RESULTSFILE_DFLT "results.txt"
 #define ER_DFLT 85
@@ -3214,7 +3264,7 @@ void process_options(void)
 #define HEADER_DFLT "0"
 #define HEADERINT_DFLT 15
 #define BIG_CARRY_DFLT 0
-
+#define ERROR_LIMIT_DFLT 40
   char fft_str[192] = "\0";
 
 
@@ -3228,15 +3278,23 @@ void process_options(void)
       /*fprintf(stderr, "Warning: Couldn't parse ini file option RoundoffTest; using default: off\n")*/;
     if( g_df < 0 &&           !IniGetInt(g_INIFILE, "PrintDeviceInfo", &g_df, D_F_DFLT) )
       /*fprintf(stderr, "Warning: Couldn't parse ini file option PrintDeviceInfo; using default: off\n")*/;
-    if( g_po < 0 &&	          !IniGetInt(g_INIFILE, "Polite", &g_po, POLITE_DFLT) )
+    if( g_pf < 0 &&	          !IniGetInt(g_INIFILE, "Polite", &g_pf, POLITE_FLAG_DFLT) )
+      /*fprintf(stderr, "Warning: Couldn't parse ini file option Polite; using default: %d\n", POLITE_DFLT)*/;
+    if( g_po < 0 &&	          !IniGetInt(g_INIFILE, "PoliteValue", &g_po, POLITE_VALUE_DFLT) )
+      /*fprintf(stderr, "Warning: Couldn't parse ini file option Polite; using default: %d\n", POLITE_DFLT)*/;
+    if( g_sl < 0 &&	          !IniGetInt(g_INIFILE, "Sleep", &g_sl, SLEEP_FLAG_DFLT) )
+      /*fprintf(stderr, "Warning: Couldn't parse ini file option Polite; using default: %d\n", POLITE_DFLT)*/;
+    if( g_sv < 0 &&	          !IniGetInt(g_INIFILE, "SleepValue", &g_sv, SLEEP_VALUE_DFLT) )
       /*fprintf(stderr, "Warning: Couldn't parse ini file option Polite; using default: %d\n", POLITE_DFLT)*/;
     if( g_dn < 0 &&           !IniGetInt(g_INIFILE, "DeviceNumber", &g_dn, 0) )
       /*fprintf(stderr, "Warning: Couldn't parse ini file option DeviceNumber; using default: 0\n")*/;
-    if( g_cpi < 1 &&          !IniGetInt(g_INIFILE, "CheckpointIterations", &g_cpi, CHECKPOINT_ITER_DFLT) )
+    if( g_cpi < 0 &&          !IniGetInt(g_INIFILE, "CheckpointIterations", &g_cpi, CHECKPOINT_ITER_DFLT) )
       /*fprintf(stderr, "Warning: Couldn't parse ini file option CheckpointIterations; using default: %d\n", CHECKPOINT_ITER_DFLT)*/;
-    if( g_ri < 1 &&          !IniGetInt(g_INIFILE, "ReportIterations", &g_ri, REPORT_ITER_DFLT) )
+    if( g_ri < 0 &&          !IniGetInt(g_INIFILE, "ReportIterations", &g_ri, REPORT_ITER_DFLT) )
       /*fprintf(stderr, "Warning: Couldn't parse ini file option CheckpointIterations; using default: %d\n", CHECKPOINT_ITER_DFLT)*/;
-    if( g_ei < 1 &&          !IniGetInt(g_INIFILE, "ErrorIterations", &g_ei, ERROR_ITER_DFLT) )
+    if( g_ei < 0 &&          !IniGetInt(g_INIFILE, "ErrorIterations", &g_ei, ERROR_ITER_DFLT) )
+      /*fprintf(stderr, "Warning: Couldn't parse ini file option CheckpointIterations; using default: %d\n", CHECKPOINT_ITER_DFLT)*/;
+    if( g_el < 0 &&          !IniGetInt(g_INIFILE, "ErrorLimit", &g_el, ERROR_LIMIT_DFLT) )
       /*fprintf(stderr, "Warning: Couldn't parse ini file option CheckpointIterations; using default: %d\n", CHECKPOINT_ITER_DFLT)*/;
     if( g_er < 0 &&           !IniGetInt(g_INIFILE, "ErrorReset", &g_er, ER_DFLT) )
       /*fprintf(stderr, "Warning: Couldn't parse ini file option ErrorReset using default: 85\n")*/;
@@ -3260,28 +3318,32 @@ void process_options(void)
     if( g_folder[0] < 0 &&           !IniGetStr(g_INIFILE, "SaveFolder", g_folder, SAVE_FOLDER_DFLT) )
       /*fprintf(stderr, "Warning: Couldn't parse ini file option SaveFolder; using default: \"%s\"\n", SAVE_FOLDER_DFLT)*/;
   }
-  else // no ini file, set default values
-  {
-    fprintf(stderr, "Warning: Couldn't find .ini file. Using defaults for non-specified options.\n");
-    if( g_cpi < 1 ) g_cpi = CHECKPOINT_ITER_DFLT;
-    if( g_ri < 1 ) g_ri = REPORT_ITER_DFLT;
-    if( g_ei < 1 ) g_ei = ERROR_ITER_DFLT;
-    if( g_thr[0] < 1 ) g_thr[0] = THREADS_DFLT;
-    if( g_fftlen < 0 ) g_fftlen = 0;
-    if( g_sf < 0 ) g_sf = S_F_DFLT;
-    if( g_ki < 0 ) g_ki = K_F_DFLT;
-    if( g_dn < 0 ) g_dn = 0;
-    if( g_df < 0 ) g_df = D_F_DFLT;
-    if( g_bc < 0 ) g_bc = BIG_CARRY_DFLT;
-    if( g_po < 0 ) g_po = POLITE_DFLT;
-    if( g_output_string[0] < 0) sprintf(g_output_string, OUTPUT_DFLT);
-    if( g_folder[0] < 0) sprintf(g_folder, SAVE_FOLDER_DFLT);
-    if( !g_input_file[0] ) sprintf(g_input_file, WORKFILE_DFLT);
-    if( !g_RESULTSFILE[0] ) sprintf(g_RESULTSFILE, RESULTSFILE_DFLT);
-    if( !g_output_header[0] ) sprintf(g_output_header, HEADER_DFLT);
-    if( !g_output_string[0] ) sprintf(g_output_string, OUTPUT_DFLT);
-    if( g_output_interval < 0 ) g_output_interval = HEADERINT_DFLT;
-  }
+  else fprintf(stderr, "Warning: Couldn't find .ini file. Using defaults for non-specified options.\n");
+
+  //set default values for anything not found in ini file
+  if( g_cpi < 0 ) g_cpi = CHECKPOINT_ITER_DFLT;
+  if( g_ri < 0 ) g_ri = REPORT_ITER_DFLT;
+  if( g_ei < 0 ) g_ei = ERROR_ITER_DFLT;
+  if( g_el < 0 ) g_el = ERROR_LIMIT_DFLT;
+  if( g_thr[0] < 0 ) g_thr[0] = THREADS_DFLT;
+  if( g_fftlen < 0 ) g_fftlen = 0;
+  if( g_sf < 0 ) g_sf = S_F_DFLT;
+  if( g_ki < 0 ) g_ki = K_F_DFLT;
+  if( g_dn < 0 ) g_dn = 0;
+  if( g_df < 0 ) g_df = D_F_DFLT;
+  if( g_bc < 0 ) g_bc = BIG_CARRY_DFLT;
+  if( g_pf < 0 ) g_po = POLITE_FLAG_DFLT;
+  if( g_po < 0 ) g_po = POLITE_VALUE_DFLT;
+  if( g_sl < 0 ) g_po = SLEEP_FLAG_DFLT;
+  if( g_sv < 0 ) g_po = SLEEP_VALUE_DFLT;
+  if( g_output_string[0] < 0) sprintf(g_output_string, OUTPUT_DFLT);
+  if( g_folder[0] < 0) sprintf(g_folder, SAVE_FOLDER_DFLT);
+  if( !g_input_file[0] ) sprintf(g_input_file, WORKFILE_DFLT);
+  if( !g_RESULTSFILE[0] ) sprintf(g_RESULTSFILE, RESULTSFILE_DFLT);
+  if( !g_output_header[0] ) sprintf(g_output_header, HEADER_DFLT);
+  if( !g_output_string[0] ) sprintf(g_output_string, OUTPUT_DFLT);
+  if( g_output_interval < 0 ) g_output_interval = HEADERINT_DFLT;
+
   if( g_fftlen < 0 ) g_fftlen = fft_from_str(fft_str); // possible if -f not on command line
   int k = check_interval(g_cpi);
   if(k != g_cpi)
@@ -3304,12 +3366,15 @@ void process_options(void)
     printf("Changing to %d.\n", k);
     g_ei = k;
   }
-  if (g_po == 0)
+  k = check_interval(g_sv);
+  if(k != g_sv)
   {
-    g_pf = 0;
-    g_po = 1;
+    printf("sleep value = %d from CUDALucas.ini must have the form k*10^m for k = 1, 2, or 5.\n",g_sv);
+    printf("Changing to %d.\n", k);
+    g_sv = k;
   }
-  else g_pf = 1;
+  if(g_el > 47) g_el = 47;
+  if(g_el < 1) g_el = 1;
   encode_output_options();
 }
 
@@ -3323,7 +3388,8 @@ int main (int argc, char *argv[])
   printf("\n");
 
   cufftbench_s = cufftbench_e = cufftbench_d = 0;
-  cufftbench_m = g_cpi = g_ri = g_er = g_thr[0] = g_fftlen = g_pf = g_po = g_sf = g_df = g_ki = g_ro = g_th = g_ei = g_bc = g_rt = -1;
+  cufftbench_m = g_cpi = g_ri = g_er = g_thr[0] = g_fftlen = g_pf = g_sl = g_sv = -1;
+  g_po = g_sf = g_df = g_ki = g_ro = g_th = g_ei = g_bc = g_rt = g_el = -1;
   g_output_string[0] = g_output_header[0] = g_output_interval = g_folder[0] = -1;
   g_AID[0] = g_input_file[0] = g_RESULTSFILE[0] = 0; /* First character is null terminator */
 
@@ -3415,7 +3481,7 @@ void parse_args(int argc,
 	    if (g_po == 0)
 	    {
 	      g_pf = 0;
-	      g_po = 1;
+	      g_po = 100;
 	    }
 	    argv += 2;
 	    argc -= 2;
@@ -3460,6 +3526,17 @@ void parse_args(int argc,
 	      exit (2);
 	    }
 	    sprintf (g_INIFILE, "%s", argv[2]);
+	    argv += 2;
+	    argc -= 2;
+	  }
+    else if (strcmp (argv[1], "-e") == 0) //ini file
+	  {
+	    if(argc < 3 || argv[2][0] == '-')
+	    {
+	      fprintf (stderr, "can't parse -e option\n\n");
+	      exit (2);
+	    }
+	    g_el = atoi (argv[2]);
 	    argv += 2;
 	    argc -= 2;
 	  }
@@ -3605,17 +3682,21 @@ int interact(int n)
   {
     case 'p' :
                 g_pf ^= 1;
-                printf ("   -polite %d\n", g_pf * g_po);
+                printf (" -- polite = %d\n", g_pf * g_po);
+                break;
+    case 'x' :
+                g_sl ^= 1;
+                printf (" -- sleep = %d\n", g_sl * g_sv);
                 break;
     case 'b' :
                 g_bc ^= 1;
-                if(g_bc) printf ("   Using 64 bit rcb and splice kernels.\n");
-                else printf ("   Using 32 bit rcb and splice kernels.\n");
+                if(g_bc) printf (" -- Using 64 bit rcb and splice kernels.\n");
+                else printf (" -- Using 32 bit rcb and splice kernels.\n");
                 break;
     case 's' :
                 g_sf ^= 1;
-                if(g_sf) printf ("   enabling -s.\n");
-                else printf ("   disabling -s.\n");
+                if(g_sf) printf (" -- enabling -s.\n");
+                else printf (" -- disabling -s.\n");
                 break;
     case 'F' :
                 printf(" -- Increasing fft length.\n");
@@ -3627,71 +3708,131 @@ int interact(int n)
                 return 1;
     case 'W' :
                 if(g_thr[0] < max_threads && (n % (8 * g_thr[0]) == 0)) g_thr[0] *= 2;
-                printf(" -- mult threads increased to %d.\n", g_thr[0]);
+                printf(" -- square threads increased to %d\n", g_thr[0]);
                 break;
     case 'w' :
                 if(g_thr[0] > 32 && (n / ( 2 * g_thr[0]) <= g_dev.maxGridSize[0])) g_thr[0] /= 2;
-                printf(" -- mult threads decreased to %d.\n", g_thr[0]);
+                printf(" -- square threads decreased to %d\n", g_thr[0]);
                 break;
     case 'E' :
                 if(g_thr[1] < max_threads) g_thr[1] *= 2;
-                printf(" -- norm2 threads increased to %d.\n", g_thr[1]);
+                printf(" -- splice threads increased to %d\n", g_thr[1]);
                 break;
     case 'e' :
                 if(g_thr[1] > 32) g_thr[1] /= 2;
-                printf(" -- norm2 threads decreased to %d.\n", g_thr[1]);
+                printf(" -- splice threads decreased to %d\n", g_thr[1]);
                 break;
     case 'R' :
                 if(g_er < 100) g_er += 5;
-                printf(" -- error_reset increased to %d.\n", g_er);
+                printf(" -- error_reset increased to %d\n", g_er);
                 break;
     case 'r' :
                 if(g_er > 0) g_er -= 5;
-                printf(" -- error_reset decreased to %d.\n", g_er);
+                printf(" -- error_reset decreased to %d\n", g_er);
                 break;
     case 'T' :
                 k = g_cpi;
                 while(k % 10 == 0) k /= 10;
                 if(k == 2) g_cpi *= 2.5;
                 else g_cpi *= 2;
-                printf(" -- checkpoint_iter increased to %d.\n", g_cpi);
+                printf(" -- checkpoint_iter increased to %d\n", g_cpi);
                 break;
     case 't' :
                 k = g_cpi;
                 while (k % 10 == 0) k /= 10;
                 if (k == 5) g_cpi /= 2.5;
                 else if (g_cpi > 1) g_cpi /= 2;
-                printf(" -- checkpoint_iter decreased to %d.\n", g_cpi);
+                printf(" -- checkpoint_iter decreased to %d\n", g_cpi);
                 break;
     case 'Y' :
                 k = g_ri;
                 while(k % 10 == 0) k /= 10;
                 if(k == 2) g_ri *= 2.5;
                 else g_ri *= 2;
-                printf(" -- report_iter increased to %d.\n", g_ri);
+                printf(" -- report_iter increased to %d\n", g_ri);
                 break;
     case 'y' :
                 k = g_ri;
                 while (k % 10 == 0) k /= 10;
                 if (k == 5) g_ri /= 2.5;
                 else if (g_ri > 1) g_ri /= 2;
-                printf(" -- report_iter decreased to %d.\n", g_ri);
+                printf(" -- report_iter decreased to %d\n", g_ri);
                 break;
     case 'U' :
                 k = g_ei;
                 while(k % 10 == 0) k /= 10;
                 if(k == 2) g_ei *= 2.5;
                 else g_ei *= 2;
-                printf(" -- error_iter increased to %d.\n", g_ei);
-                break;
+                printf(" -- error_iter increased to %d\n", g_ei);
+                return 4;
     case 'u' :
                 k = g_ei;
                 while (k % 10 == 0) k /= 10;
                 if (k == 5) g_ei /= 2.5;
                 else if (g_ei > 1) g_ei /= 2;
-                printf(" -- error_iter decreased to %d.\n", g_ei);
+                printf(" -- error_iter decreased to %d\n", g_ei);
+                return 4;
+    case 'Q' :
+                k = g_sv;
+                while(k % 10 == 0) k /= 10;
+                if(k == 2) g_sv *= 2.5;
+                else g_sv *= 2;
+                printf(" -- sleep value increased to %d\n", g_sv);
+                break;
+    case 'q' :
+                k = g_sv;
+                while (k % 10 == 0) k /= 10;
+                if (k == 5) g_sv /= 2.5;
+                else if (g_sv > 1) g_sv /= 2;
+                printf(" -- sleep value decreased to %d\n", g_sv);
+                break;
+    case 'I' :
+                if(g_el < 47)
+                {
+                  g_el++;
+                  printf(" -- error_limit increased to %d\n", g_el);
+                }
+                else printf(" -- error_limit is already 47. Larger values are not allowed.\n");
+                return 4;
+    case 'i' :
+                if(g_el > 20)
+                {
+                  g_el--;
+                  printf(" -- error_limit decreased to %d.\n", g_el);
+                }
+                else printf(" -- error_limit is already 20. Smaller values are not allowed.\n");
+                return 4;
+    case 'O' :
+                if(g_po == 100)
+                {
+                  g_po = 1;
+                  printf(" -- polite interval cycled back to %d\n", g_po);
+                }
+                else
+                {
+                  k = g_po;
+                  while(k % 10 == 0) k /= 10;
+                  if(k == 2) g_po *= 2.5;
+                  else g_po *= 2;
+                  printf(" -- polite interval increased to %d\n", g_po);
+                }
                 break;
     case 'o' :
+                if(g_po == 1)
+                {
+                  g_po = 100;
+                  printf(" -- polite interval cycled back to %d\n", g_po);
+                }
+                else
+                {
+                  k = g_po;
+                  while(k % 10 == 0) k /= 10;
+                  if(k == 5) g_po /= 2.5;
+                  else g_po /= 2;
+                  printf(" -- polite interval decreased to %d\n", g_po);
+                }
+                break;
+    case 'm' :
                 IniGetStr(g_INIFILE, "OutputString", g_output_string, "0");
                 IniGetStr(g_INIFILE, "OutputHeader", g_output_header, "0");
                 IniGetInt(g_INIFILE, "OutputHInterval", &g_output_interval, 0);
@@ -3701,6 +3842,30 @@ int interact(int n)
     case 'n' :
                 printf(" -- resetting timer.\n");
                 return 2;
+    case 'z' :
+                printf(" -- fft count                      %d\n", g_fft_count);
+                printf("  -- current fft                    %dK\n", g_ffts[g_fftlen] / 1024);
+                printf("  -- smallest fft for this exponent %dK\n", g_ffts[g_lbi] / 1024);
+                printf("  -- largest fft for this exponent  %dK\n", g_ffts[g_ubi] / 1024);
+                printf("  -- square threads                 %d\n", g_thr[0]);
+                printf("  -- splice threads                 %d\n", g_thr[1]);
+                printf("  -- checkpoint interval            %d\n", g_cpi);
+                printf("  -- report interval                %d\n", g_ri);
+                printf("  -- error check interval           %d\n", g_ei);
+                printf("  -- error reset percent            %d\n", g_er);
+                printf("  -- error limit                    %d\n", g_el);
+                printf("  -- polite flag                    %d\n", g_pf);
+                printf("  -- polite value                   %d\n", g_po);
+                printf("  -- sleep flag                     %d\n", g_sl);
+                printf("  -- sleep value                    %d\n", g_sv);
+                printf("  -- 64 bit carry flag              %d\n", g_bc);
+                printf("  -- save all checkpoints flag      %d\n", g_sf);
+                printf("  -- device number                  %d\n", g_dn);
+                printf("  -- savefile folder                %s\n", g_folder);
+                printf("  -- ini file                       %s\n", g_INIFILE);
+                printf("  -- input file                     %s\n", g_input_file);
+                printf("  -- results file                   %s\n", g_RESULTSFILE);
+                break;
     default  :
                 break;
   }
