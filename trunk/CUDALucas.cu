@@ -2106,9 +2106,13 @@ void threadbench (int st_fft, int end_fft, int passes, int mode, int device_numb
       {
         for (t = s[k]; t < e[k]; t++)
         {
-          if(k == 1 || (fft <= 4 * th[t] * g_dev.maxGridSize[0] && fft % (4 * th[t]) == 0))
+          if(k == 1 || (fft / (4 * th[t]) <= g_dev.maxGridSize[0] && fft % (4 * th[t]) == 0))
           {
-            if(k == 0) t0 = t;
+            if(k == 0)
+            {
+              t0 = t;
+              t1 = 2;
+            }
             else t1 = t;
             for(pass = 1; pass <= passes; pass++)
             {
