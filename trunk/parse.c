@@ -180,9 +180,9 @@ returns 1 if the assignment is within the supported bounds of CUDALucas,
 */
 {
 	// Perhaps add a largest exponent?
-	if(exp < 7000)
+	if(exp < 7500)
   {
-    fprintf(stderr, "Warning: exponents < 7000 are not supported!\n");
+    fprintf(stderr, "Warning: exponents < 7500 are not supported!\n");
     return 0;
 	}
 	if(fftlen % (1024))
