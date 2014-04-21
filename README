@@ -1,10 +1,10 @@
 Q. What files should I download from SourceForge?
 A. There are various executables for both Windows and Linux, some text files,
    and some necessary library files. Pick whichever executable is best for you,
-   then download all the text files including this README and CUDALucas.ini. 
+   then download all the text files including this README and CUDALucas.ini.
    Next, pick the library archive for your operating system. Place all these
    files into your CUDALucas folder, and then read the rest of this README.
-   
+
 Q. I get errors about "lib cudart not found" or "lib cufft not found". What can
    I do?
 A. See section 3 of this document; you can download the files from SourceForge:
@@ -40,42 +40,42 @@ Content
 (See https://sourceforge.net/p/cudalucas/wiki/Home/ for a version of this
 information that includes links.)
 
-CUDALucas is a program implementing the Lucas-Lehmer primality test for 
+CUDALucas is a program implementing the Lucas-Lehmer primality test for
 Mersenne numbers using the Fast Fourier Transform implemented by nVidia's cuFFT
 library. You need a CUDA-capable nVidia card with compute compatibility >= 1.3.
 
-Mersenne numbers are numbers of the form 2^p - 1; it is possible that some of 
-these numbers are prime. For instance, 2^7-1 is prime, 2^127-1 is prime, and 
-2^43,112,609-1 is prime (and is also the largest known prime number in the 
-world). For various reasons explained in the Wikipedia article, throughout 
-almost all known history, the largest known prime number has been a Mersenne 
+Mersenne numbers are numbers of the form 2^p - 1; it is possible that some of
+these numbers are prime. For instance, 2^7-1 is prime, 2^127-1 is prime, and
+2^43,112,609-1 is prime (and is also the largest known prime number in the
+world). For various reasons explained in the Wikipedia article, throughout
+almost all known history, the largest known prime number has been a Mersenne
 prime.
 
-Most CUDALucas' users that the developers are aware of use this program to help 
-search for Mersenne primes in coordination with the Great Internet Mersenne 
-Prime Search. It is one of the internet's first distributed computing projects, 
-started in 1996, and since that year has found all of the largest known prime 
-numbers. GIMPS searches for primes by doing some "trial factoring" to find a 
-small factor of a Mersenne number; if that fails, then GIMPS performs the 
-Lucas-Lehmer test to determine once and for all if a Mersenne number is prime. 
-You can participate without needing to be aware of the mathematics involved; 
-all you need to do is download and run the free program GIMPS provides called 
+Most CUDALucas' users that the developers are aware of use this program to help
+search for Mersenne primes in coordination with the Great Internet Mersenne
+Prime Search. It is one of the internet's first distributed computing projects,
+started in 1996, and since that year has found all of the largest known prime
+numbers. GIMPS searches for primes by doing some "trial factoring" to find a
+small factor of a Mersenne number; if that fails, then GIMPS performs the
+Lucas-Lehmer test to determine once and for all if a Mersenne number is prime.
+You can participate without needing to be aware of the mathematics involved;
+all you need to do is download and run the free program GIMPS provides called
 Prime95.
 
-However, Prime95 is optimized for CPUs; in the last few years, volunteer 
-developers from the GIMPS community have ported various parts of Prime95's 
-functionality to GPUs. Shoichiro Yamada took a CPU-based Lucas-Lehmer testing 
-program (written in generic C, as opposed to the x86-specific assembly of 
-Prime95) and ported it to CUDA; this is now known as CUDALucas. Mr. Yamada 
-remains the primary developer of the mathematics code; his username on 
-MersenneForum.org is 'msft' (and I hope to add him as an admin of this 
-SourceForge project as soon as possible). The other GPU programs are mfaktc, a 
-program using CUDA GPUs to perform the "trial factoring" mentioned above, and 
-mfakto which is a port of mfaktc to OpenCL, supporting AMD/ATI graphics cards. 
-(mfakto's developer maintains a GitHub page for it; both programs are 
+However, Prime95 is optimized for CPUs; in the last few years, volunteer
+developers from the GIMPS community have ported various parts of Prime95's
+functionality to GPUs. Shoichiro Yamada took a CPU-based Lucas-Lehmer testing
+program (written in generic C, as opposed to the x86-specific assembly of
+Prime95) and ported it to CUDA; this is now known as CUDALucas. Mr. Yamada
+remains the primary developer of the mathematics code; his username on
+MersenneForum.org is 'msft' (and I hope to add him as an admin of this
+SourceForge project as soon as possible). The other GPU programs are mfaktc, a
+program using CUDA GPUs to perform the "trial factoring" mentioned above, and
+mfakto which is a port of mfaktc to OpenCL, supporting AMD/ATI graphics cards.
+(mfakto's developer maintains a GitHub page for it; both programs are
 free-and-open-source software under the GPL.)
 
-To participate in GIMPS yourself using CUDALucas (assuming you have the 
+To participate in GIMPS yourself using CUDALucas (assuming you have the
 necessary CUDA hardware listed above), all you need to do is go read section 4.
 
 
@@ -96,13 +96,13 @@ programs for such cards that you can use to help GIMPS (see section 0).
 
 You must have the CUDA Toolkit installed, as well as a C compiler. gcc or MSVC
 will do in a pinch. The CUDA Toolkit includes nVidia's CUDA compiler, as well
-as some necessary library and include files. (You do not need the full CUDA 
+as some necessary library and include files. (You do not need the full CUDA
 SDK.) You can get the Toolkit from <http://developer.nvidia.com/cuda-toolkit>.
 
 We are still trying to determine which version CUDA libraries and which
 architectures produce the fastest executable. In the meantime, use the latest
 toolkit plus the defaults in the Makefiles. (Please tell us, either on
-SourceForge or on MersenneForum, if you figure out which combinations work 
+SourceForge or on MersenneForum, if you figure out which combinations work
 better.)
 
 There are some different make commands you can run, but at the moment none of
@@ -114,8 +114,8 @@ them does anything particularly interesting.
 ###########################
 
 You should be able to run 'make' without modifications. If, when you installed
-the toolkit, you did not follow the nVidia defaults, you might need specify a 
-different CUDA Toolkit location other than the default '/usr/local/cuda' used 
+the toolkit, you did not follow the nVidia defaults, you might need specify a
+different CUDA Toolkit location other than the default '/usr/local/cuda' used
 in the Makefile.
 
 
@@ -123,11 +123,11 @@ in the Makefile.
 # 2.2 Compilation (Windows) #
 #############################
 
-You will need to download make.exe 
+You will need to download make.exe
 (http://gnuwin32.sourceforge.net/packages/make.htm)
-Update the makefile.win with the version you want to compile. You should be 
+Update the makefile.win with the version you want to compile. You should be
 able to run 'make -f makefile.win' without modifications. If, when you
-installed the toolkit, you did not follow the nVidia defaults, you might need 
+installed the toolkit, you did not follow the nVidia defaults, you might need
 specify a different CUDA Toolkit location in the makefile.win file.
 
 
@@ -136,15 +136,15 @@ specify a different CUDA Toolkit location in the makefile.win file.
 # 3 Running CUDALucas        #
 ##############################
 
-CUDALucas is designed to be primarily driven with the information in 
-CUDALucas.ini. (If you don't have a copy of that file, go to 
+CUDALucas is designed to be primarily driven with the information in
+CUDALucas.ini. (If you don't have a copy of that file, go to
 https://sourceforge.net/projects/cudalucas/files/ to get the latest version.)
 You can run CUDALucas from the command line without any arguments, and it
 should read CUDALucas.ini (it should be in the same directory) and start
 crunching.
 
 CUDALucas reads what numbers to test from a "work file". The default work file
-is "worktodo.txt", however you can change the name of that file in 
+is "worktodo.txt", however you can change the name of that file in
 CUDALucas.ini. The information in the work file should look something like:
 Test=25613431
 CUDALucas will interpret this to mean "Test 2^25613431-1 to see if it's a prime
@@ -152,25 +152,25 @@ number." See section 4 on how to get numbers to test that haven't been tested
 before. (This is done through GIMPS.)
 CUDALucas will keep crunching numbers as long as there are assignments in your
 work file; it will exit if the file is empty.
-Alternately, you can just pass in a single exponent as a command line argument, 
+Alternately, you can just pass in a single exponent as a command line argument,
 and CUDALucas will then test 2^arg-1 and exit.
 
-When it's done testing a number, CUDALucas will output the results to a 
+When it's done testing a number, CUDALucas will output the results to a
 "results file", which defaults to "results.txt"; again, however, you can change
-that using the .ini file. We highly encourage you to report your results to 
-GIMPS (see section 4). You can keep track of your results if you create an 
+that using the .ini file. We highly encourage you to report your results to
+GIMPS (see section 4). You can keep track of your results if you create an
 account with GIMPS.
 
-You can modify a number of options that change how CUDALucas behaves; again, 
-see CUDALucas.ini. You can also specify any of those options from the command 
-line; try running "./CUDALucas -h" from a terminal to see what options you can 
-use. Also note that there is a self test mode and a benchmark mode that can 
+You can modify a number of options that change how CUDALucas behaves; again,
+see CUDALucas.ini. You can also specify any of those options from the command
+line; try running "./CUDALucas -h" from a terminal to see what options you can
+use. Also note that there is a self test mode and a benchmark mode that can
 only be specified from the command line.
 
 Note that you need library files to run CUDALucas; these are "cudart.dll" and
 "cufft.dll" for Windows, and "cudart.so" and "cufft.so" for Linux. In Windows,
-it's sufficient to put the .dll files into the same directory as the 
-executable; in Linux, you have to set the LD_LIBRARY_PATH environment varibale 
+it's sufficient to put the .dll files into the same directory as the
+executable; in Linux, you have to set the LD_LIBRARY_PATH environment varibale
 to include the directory where the .so's are located. These files can be
 downloaded from SourceForge.
 
@@ -178,7 +178,7 @@ It is safe to kill CUDALucas with a Ctrl+C (or by most any other method) at any
 time. It will write a save file and exit. When you next run CUDALucas, it will
 detect that there is a save file and resume.
 
-Please feel free to ask for help on SourceForge or MersenneForum.org if this 
+Please feel free to ask for help on SourceForge or MersenneForum.org if this
 isn't clear.
 
 
@@ -196,21 +196,84 @@ CUDALucas in a terminal where you can watch it crunch. (The drawback to this
 is that if CUDALucas exits with an error, the terminal will automatically close
 and you won't see the error message.)
 
+############################
+# 3.2 Command line options #
+############################
 
+-h                     prints a help message listing most of the command line
+                       options and exits.
+
+-v                     prints the program version number and exits.
+
+-info                  causes current device info to be printed to the screen
+                       at the beginning of the first test.
+
+-k                     enables keyboard input during test, see ini file description.
+
+-polite n              sets the polite iteration interval to n, or disables polite
+                       option if n = 0.
+
+-d n                   sets CUDALucas to run on device d
+
+-c n                   sets checkpoint iteration value. Checkpoints will be written
+                       every n iterations.
+
+-x n                   sets report iteration value. Screen reports will be written
+                       every n iterations.
+
+-f n<k|K|m|M>          sets fft length to n, n * 1024 (if k or K specified), or
+                       n * 1048576 (if m or M specified). Values of n that are not
+                       mutiples of 1024, or do not end in k, K, m, or M will be
+                       rejected.
+
+-threads m s           sets thread values for the multiplication and splicing kernels.
+                       m and s should be powers of two between 32 and 1024.
+
+-i filename            sets the name of the file that the initialzation information
+                       is to be obtained from. Default is CUDALucas.ini.
+
+-s <folder>            saves all checkpoint files to subdirectory specified by "folder".
+                       Default folder is "savefiles"
+
+-r n                   runs the short (n = 0) or long (n = 1) version of the selftest.
+
+-cufftbench s e i      times i repetitions of a 50 ll iteration loop, for all reasonable
+                       fft lengths between s * 1024 and e * 1024, then writes the fastest
+                       fft lengths in the file <gpu> fft.txt. Reasonable lengths are
+                       n * 1024 where the largest prime factor of n is 7.
+
+-threadbench s e i m   times i repetitions of a 50 ll iteration loop, for certain ffts
+                       lengths between s * 1024 and e * 1024. Each tested fft length gets
+                       combined with different thread values for the multiplication and
+                       splicing kernels. The fastest thread values for each fft are written
+                       in the file <gpu> threads.txt. The parameter m gives some control
+                       over which fft lengths are tested, which thread values are tested,
+                       and screen output:
+                       bit 0: if set, only fft values from <gpu> fft.txt will be tested,
+                              otherwise, all reasonable fft lengths will be tested.
+                       bit 1: if set, skips thread value 32.
+                       bit 2: if set, skips thread value 1024.
+                       bit 3: if set, supresses intermediate output: only the optimal
+                              thread values for each fft will be printed to the screen.
+
+-memtest s i           tests s 25MB chunks of memory doing i repetitions of a 100000 iteration
+                       loop on each of 5 different ll test related sets of data. Each iteration
+                       consists of copying a 25MB chunk of data, then re-reading and comparing
+                       that copy to the original.
 
 ###################################################################
 # 4 How to get work and report results from/to the GIMPS server   #
 ###################################################################
 
 You can get numbers to test from the GIMPS server, which is called PrimeNet.
-It is located at http://www.mersenne.org/. You can get and report work 
-anonymously, however to track what numbers you've tested and track your credit, 
-you must create an account. You don't even need to enter your email for an 
-account, though of course it's good to have if you ever lose your login 
+It is located at http://www.mersenne.org/. You can get and report work
+anonymously, however to track what numbers you've tested and track your credit,
+you must create an account. You don't even need to enter your email for an
+account, though of course it's good to have if you ever lose your login
 information :)
 
 Getting work:
-  Step 1) go to http://www.mersenne.org/ and (optionally) login with your 
+  Step 1) go to http://www.mersenne.org/ and (optionally) login with your
           username and password
   Step 2) on the menu on the left click "Manual Testing" and then
           "Assignments"
@@ -221,21 +284,21 @@ Getting work:
   Step 4) Choose your preferred work type. There are a variety of choices here;
           you can choose the default "World record tests", which means if your
           number is prime, it would be a world record. "Smallest available
-          first time tests" might be not-World-record, though practically 
+          first time tests" might be not-World-record, though practically
           it's exactly the same as "World record tests". "100 million digits"
           is way what's currently feasible, and will take months or years
           to complete one test. This isn't recommended. Finally, "Double Check
-          tests" is where you get numbers that have been tested once, but 
-          haven't been double checked. Though Double Checking sounds less 
-          glamorous, we currently recommend this work type. Not only are the 
+          tests" is where you get numbers that have been tested once, but
+          haven't been double checked. Though Double Checking sounds less
+          glamorous, we currently recommend this work type. Not only are the
           assignments much shorter, but at the moment, two matching CUDALucas
-          tests will not mark an number as "Double Checked". (This is for 
+          tests will not mark an number as "Double Checked". (This is for
           safety reasons, and hopefully we'll add more functionality in the
-          future to remove this restriction.) What this means is that it's 
+          future to remove this restriction.) What this means is that it's
           safer for CUDALucas to test numbers that have been tested once with
           Prime95, though some people do first time tests anyways.
   Step 5) Click the button "Get Assignments"
-  Step 6) Copy and paste the "Test=..." (or "DoubleCheck=...") lines directly 
+  Step 6) Copy and paste the "Test=..." (or "DoubleCheck=...") lines directly
           into your work file (default "worktodo.txt") in your CUDALucas
           directory.
 
@@ -243,8 +306,8 @@ Getting work:
 Now you're all set. Just launch CUDALucas and watch it crunch :)
 
 Once CUDALucas has finished a test, report the result to PrimeNet:
-  Step 1) go to http://www.mersenne.org/ and (optionally) login with your 
-          username and password. (Again, if you want to track your credit, 
+  Step 1) go to http://www.mersenne.org/ and (optionally) login with your
+          username and password. (Again, if you want to track your credit,
           logging in is necessary.)
   Step 2) On the menu on the left click "Manual Testing" and then
           "Results"
@@ -253,15 +316,15 @@ Once CUDALucas has finished a test, report the result to PrimeNet:
   Step 4) Once PrimeNet responds with a verification message, you can either
           delete your results file or move the data to a different file.
 
-Advanced usage (set the FFT length):    
+Advanced usage (set the FFT length):
     Recently (since 2.04) you can now specify the FFT length by adding a field
-    to the "Test=..." assignment line in the work file. To use (e.g.) a 1440K 
-    length for a test, the line should look like 
+    to the "Test=..." assignment line in the work file. To use (e.g.) a 1440K
+    length for a test, the line should look like
     "Test=<assignment key>,<exponent>,1440K". Note that no space is allowed
-    between the number (1440) and the K. You must have a K or M 
+    between the number (1440) and the K. You must have a K or M
     (e.g. "...,<exponent>,3M" for a 3M length) for the program to recognize the
     field as an FFT length.
-    
+
     This feature should render the FFTLength ini option and the -f command line
     option obsolete.
 
@@ -275,25 +338,95 @@ Advanced usage (set the FFT length):
   checks but when you really try you should be able to screw it up.
 - The GUI of your OS might be very laggy while running CUDALucas. (Newer GPUs
   with compute capabilty 2.0 or higher can handle this _MUCH_ better.)
-  If you're experiencing this problem, try setting "Polite" to 1 in 
+  If you're experiencing this problem, try setting "Polite" to 1 in
   CUDALucas.ini.
-- The very first checkpoint after a restart appears to have very quick 
-  iteration times, but aren't actually that fast. The second checkpoint and 
+- The very first checkpoint after a restart appears to have very quick
+  iteration times, but aren't actually that fast. The second checkpoint and
   beyond appear normal.
-
-
+  **This last point can be removed.
+  **Put information about ffts hanging here?
 
 ############
 # 6 Tuning #
 ############
 
 Read CUDALucas.ini (you should have already read it in any case). Some options
-to look at are "Polite", "Threads", and "CheckRoundOffAllIterations". You can 
-also activate as an option to save all checkpoint files instead of just the 
+to look at are "Polite", "Threads", and "CheckRoundOffAllIterations". You can
+also activate as an option to save all checkpoint files instead of just the
 most recent ones.
 
+** New
+A new card should have some integrity checks run on it. Options -r 0 or -r 1
+will run self tests which check residues after 10000 iterations for various
+exponents. -r 0 runs a short test, testing only a few known Mersenne primes.
+-r 1 is a more thourough test. Any residue mismatches in these tests usually
+indicate memory problems with the card. For a more complete memory test, use
+-memtest n i
+Choose n and i so that the test runs for at least a few hours. If memory
+errors are detected, decrease the memory clock until the errors go away.
+An additional 1-2% decrease from the initial stability point is recommended.
 
+cufftbench
+To optimize fft selection for your card, run -cufftbench s e i
+All reasonable fft lengths between s * 1024 and e * 1024 will be tested i times,
+where reasonable is defined as 7 smooth multiples of 1024.
+Cards driving a display usually require higher values of i.
+The results of the test are written in <gpu> fft.txt. Any old version of the
+fft.txt file is saved with a time stamp added to the file name. The fft.txt
+file consists of the fastest fft lengths for the particular card, listed in
+increasing order. Each line starts with the fft length (as a multiple of 1024)
+and also includes an estimate of the largest exponent that fft length can be
+used with and the iteration time. The fft.txt can be edited, but it requires
+the fft length to be the first entry on any line, and that the ffts are listed
+in increasing order. Anything except an initial numerical entry on any line is
+ignored.
 
+threadbench
+The option -threadbench s e i m times different threads settings for two kernels,
+the kernel that does the pointwise squaring and the carry splicing kernel.
+fft lengths from s * 1024 to e * 1024 are tested, using values from 32 to 1024
+for the threads settings. Just as with the cufftbench option, i iterations are
+done at each setting. Larger values of i are needed for cards driving a display.
+The fastest times and associated threads values are appended to <gpu> threads.txt.
+Only the most recent results are used. This file can also be edited manually.
+Each line should start with an fft length (as a multiple of 1024), followed by the
+threads value for the squaring kernel and then the threads value for the splicing
+kernel. The threads values must be powers of 2 between 32 and 1024.
+
+Error check interval
+If set to n, will check the roundoff error once every n iterations. Slowest, but
+most accurate is with ErrorIterations=1. With any larger value, the reported roundoff
+error is most likely smaller than the largest roundoff error. Error thresholds are
+accordingly reduced for such values. For example, if the error threshold is set to 45
+and ErrorIterations is 1, then any roundoff error <= .45 is ignored. Any roundoff
+error > .45 triggers the error handling routines. But for ErrorIterations
+set to 100, any roundoff errors > .35 will trigger the error handling routines.
+
+Screen report interval
+Screen report iterations involve extra memory writing on the device, as well as
+a memory transfer from device to host, together with some minimal host processing.
+Very frequent screen reports (once every few seconds) result in a noticeable slowdown
+and increased cpu utilization.
+
+Checkpoint interval
+Checkpoint iterations involve a significant amount of cpu processing preparing the
+checkpoint file, besides writing the checkpoint file to the disk and backing up the
+old checkpoint file. Because of this, checkpoint iterations take significantly longer
+than non-checkpoint iterations. Less frequent checkpoints mitigate this delay, but risk
+losing time in case of power outage or other unexpected termination of the program.
+
+Error Reset
+At each screen report, a roundoff error is computed. This roundoff error is either the
+the largest roundoff error encountered since the last report or a percentage of the last
+reported roundoff error, whichever is larger. The percent is given by the variable ErrorReset.
+Recording a new roundoff error is a slow process. Larger values of the error reset variable
+skip recording a new value more often, speeding up the iteration times. Small values report
+smaller roundoff errors that larger values ignore.
+
+Polite
+The polite option can be used to introduce some idle time to the gpu. If Polite=1 and
+PoliteValue=n, then once every n iterations the gpu is synchonized, preventing any new
+work from being scheduled until all previouly assigned work is completed.
 #########
 # 7 FAQ #
 #########
@@ -307,9 +440,9 @@ A Yes, with the exception that a single instance of CUDALucas can only use one
 
 Q Can I run multiple instances of CUDALucas on the same computer?
 A Yes! You can even run more than one instance from the same dir. Use the
-  "CUDALucas -i <ini filename>" command line option to specify an INI file 
-  other than the default "CUDALucas.ini". Each instance must have its own work 
-  file, however it is safe for all instances to print to the same results file. 
+  "CUDALucas -i <ini filename>" command line option to specify an INI file
+  other than the default "CUDALucas.ini". Each instance must have its own work
+  file, however it is safe for all instances to print to the same results file.
   It is NOT safe for two instances to test the same exponent -- they will
   clobber each others' save files.
 
@@ -325,12 +458,20 @@ A Yes, but be careful. All versions starting with 2.xx should be compatible, as
   to find out when the format changed. This question and answer will also be
   updated if the format changes in the future.
 
+  **New answer:
+A No. Version 2.05 uses a different checkpoint file format from previous
+  versions, as well as a crc to ensure integrity of the data in the checkpoint file.
+  Running CUDALucas in a directory with an old version of the checkpoint file will
+  cause the test to restart at iteration 0, eventually replacing the old checkpoint
+  files with new ones.
+  Checkpoint files for versions 1.6x -- 2.04 should be interchangable.
+
 Q Version numbers
 A Release numbers are X.XX, where the first number has now reached 2, and the
   other two just go up by one with each release. If you get a version with
-  "Alpha" or "Beta" in it, then it probably doesn't work right and you 
+  "Alpha" or "Beta" in it, then it probably doesn't work right and you
   shouldn't use it for "production" work.
-  
+
 
 
 ###########
@@ -341,17 +482,17 @@ See the TODO file for more details.
 2.05:
 - Add log file support.
 - Much of the code is placed in the wrong functions, so the interface between
-    functions is often extremely awkward. I'd like to fix this, especially 
+    functions is often extremely awkward. I'd like to fix this, especially
     since it will go a long way to adding log functionality for 2.05.
-    
+
 TBA:
-- automatic primenet interaction (Eric Christenson is working on this for mfaktc)         
+- automatic primenet interaction (Eric Christenson is working on this for mfaktc)
                            ^ specification draft exists
   - This will mean users don't have to manually get and report work from PrimeNet
   - The security module that would be used would be closed source, to maintain
-    integrity of PrimeNet's data. GPL v3 does not allow to have parts of the 
+    integrity of PrimeNet's data. GPL v3 does not allow to have parts of the
     program to be closed source. Solution: We'll re-release under another
-    license. This is NOT the end of the GPL v3 version! We'll release future 
-    versions of CUDALucas under GPL v3! We want CUDALucas being open source! 
-    The only differences of the closed version will be the security module and 
+    license. This is NOT the end of the GPL v3 version! We'll release future
+    versions of CUDALucas under GPL v3! We want CUDALucas being open source!
+    The only differences of the closed version will be the security module and
     the license information.
