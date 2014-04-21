@@ -1676,8 +1676,7 @@ unsigned *read_checkpoint(int q)
       if(x_packed[end + 9] != checkpoint_checksum((char*) x_packed, 4 * (end + 9)))
       //ch_sum(x_packed, q))
       fprintf (stderr, "\nThe checkpoint appears to be corrupt. Trying the backup file.\n");
-      //else
-      return x_packed;
+      else return x_packed;
     }
   }
   fPtr = fopen(chkpnt_tfn, "rb");
@@ -1692,8 +1691,7 @@ unsigned *read_checkpoint(int q)
     {
       fclose(fPtr);
       if(x_packed[end + 9] != ch_sum(x_packed, q)) fprintf (stderr, "\nThe backup appears to be corrupt. Restarting test.\n");
-      //else
-      return x_packed;
+      else return x_packed;
     }
   }
   return x_packed;
@@ -1728,7 +1726,7 @@ void write_checkpoint(unsigned *x_packed, int q, unsigned long long residue)
     sprintf (chkpnt_sfn, "%s/s" "%d.%d.%016llx", g_folder, q, x_packed[end + 2] - 1, residue);
     sprintf (test, "%s/%s", g_folder, ".empty.txt");
 #else
-    sprintf (chkpnt_sfn, "%s\\s" "%d.%d.%016llx", g_folder, q, x_packed[end + 2] - 1, residue);
+    sprintf (chkpnt_sfn, "%s\\s" "%d.%d.%016llx.cls", g_folder, q, x_packed[end + 2] - 1, residue);
     sprintf (test, "%s\\%s", g_folder, ".empty.txt");
 #endif
     fPtr = NULL;
@@ -2420,11 +2418,31 @@ void cufftbench (int cufftbench_s, int cufftbench_e, int passes, int device_numb
   char fftfile[32];
   FILE *fptr;
 
+
+  char fftfile_bak[64];
+
+  time_t now;
+  struct tm *tm_now = NULL;
+  char buffer[192];
+  char output[4][32];
+  int index = 0;
+
+  now = time(NULL);
+  tm_now = localtime(&now);
+  strftime(output[0], 32, "%d", tm_now);                             //date
+  strftime(output[1], 32, "%H", tm_now);                             //hour
+  strftime(output[2], 32, "%M", tm_now);                            //min
+  strftime(output[3], 32, "%S", tm_now);                            //sec
+  for(i = 0; i < 4; i++) index += sprintf(buffer + index,"%s",output[i]);
   sprintf (fftfile, "%s fft.txt", g_dev.name);
+  sprintf (fftfile_bak, "%s fft%s.txt", g_dev.name, buffer);
+  (void) unlink (fftfile_bak);
+  (void) rename (fftfile, fftfile_bak);
 	fptr = fopen_and_lock(fftfile, "w");
+
   if(!fptr)
   {
-    printf("Cannot open %s.\n",fftfile);
+    printf ("Cannot open %s.\n",fftfile);
     printf ("Device              %s\n", g_dev.name);
     printf ("Compatibility       %d.%d\n", g_dev.major, g_dev.minor);
     printf ("clockRate (MHz)     %d\n", g_dev.clockRate/1000);
@@ -2461,6 +2479,7 @@ void cufftbench (int cufftbench_s, int cufftbench_e, int passes, int device_numb
     }
     unlock_and_fclose(fptr);
     if(warning) printf("\nWARNING, the bounds were not both powers of two, results at either end may not be accurate.\n\n");
+    printf("Old %s moved to %s.\n", fftfile, fftfile_bak);
     printf("Optimal fft lengths saved in %s.\nPlease email a copy to james@mersenne.ca.\n", fftfile);
     fflush(NULL);
   }
@@ -3453,18 +3472,19 @@ void parse_args(int argc,
     if (strcmp (argv[1], "-h") == 0) //Help
     {
   	  fprintf (stderr, "$ CUDALucas -h|-v\n\n");
-  	  fprintf (stderr, "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads 32|64|128|256|512|1024] [-c checkpoint_iteration] [-f fft_length] [-s folder] [-polite iteration] [-k] exponent|input_filename\n\n");
-  	  fprintf (stderr, "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads 32|64|128|256|512|1024] [-polite iteration] -r\n\n");
-  	  fprintf (stderr, "$ CUDALucas [-d device_number] [-info] -cufftbench start end passes\n\n");
+  	  fprintf (stderr, "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads t1 t2] [-c checkpoint_iteration] [-f fft_length] [-s folder] [-polite iteration] [-k] exponent|input_filename\n\n");
+  	  fprintf (stderr, "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads t1 t2] -r [0|1]\n\n");
+  	  fprintf (stderr, "$ CUDALucas [-d device_number] -cufftbench start end passes\n\n");
+  	  fprintf (stderr, "$ CUDALucas [-d device_number] -threadbench start end passes mode\n\n");
+  	  fprintf (stderr, "$ CUDALucas [-d device_number] -memtest size passes\n\n");
       fprintf (stderr, "                       -h          print this help message\n");
       fprintf (stderr, "                       -v          print version number\n");
       fprintf (stderr, "                       -info       print device information\n");
       fprintf (stderr, "                       -i          set .ini file name (default = \"CUDALucas.ini\")\n");
-  	  fprintf (stderr, "                       -threads    set threads numbers (eg -threads 256 128 128)\n");
+  	  fprintf (stderr, "                       -threads    set threads numbers (eg -threads 256 128)\n");
   	  fprintf (stderr, "                       -f          set fft length (if round off error then exit)\n");
   	  fprintf (stderr, "                       -s          save all checkpoint files\n");
   	  fprintf (stderr, "                       -polite     GPU is polite every n iterations (default -polite 0) (-polite 0 = GPU aggressive)\n");
-  	  fprintf (stderr, "                       -cufftbench exec CUFFT benchmark. Example: $ ./CUDALucas -d 1 -cufftbench 1 8192 2\n");
  	    fprintf (stderr, "                       -r          exec residue test.\n");
   	  fprintf (stderr, "                       -k          enable keys (see CUDALucas.ini for details.)\n\n");
   	  exit (2);
@@ -3487,7 +3507,8 @@ void parse_args(int argc,
 	      g_pf = 0;
 	      g_po = 100;
 	    }
-	    argv += 2;
+	    else g_pf = 1;
+      argv += 2;
 	    argc -= 2;
 	  }
     else if (strcmp (argv[1], "-r") == 0) // Residue check
@@ -3847,7 +3868,7 @@ int interact(int n)
                 printf(" -- resetting timer.\n");
                 return 2;
     case 'z' :
-                printf(" -- fft count                      %d\n", g_fft_count);
+                printf("  -- fft count                      %d\n", g_fft_count);
                 printf("  -- current fft                    %dK\n", g_ffts[g_fftlen] / 1024);
                 printf("  -- smallest fft for this exponent %dK\n", g_ffts[g_lbi] / 1024);
                 printf("  -- largest fft for this exponent  %dK\n", g_ffts[g_ubi] / 1024);
