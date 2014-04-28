@@ -1314,6 +1314,7 @@ int *init_lucas(unsigned *x_packed,
   *n = choose_fft_length(q, &g_fftlen);
   if(*n != (int) x_packed[end + 1])
   {
+    x_packed[end + 1] = *n;
     if(time_adj) *time_adj = *total_time;
     if(*j > 1 && iter_adj) *iter_adj = *j;
   }
