@@ -3005,6 +3005,14 @@ check (int q)
               total_time += diff1;
               time_adj = total_time;
               iter_adj = j + 1;
+              time0.tv_sec = time1.tv_sec;
+              time0.tv_usec = time1.tv_usec;
+              j_b = j;
+              o_b = offset;
+              tt_b = total_time;
+              ta_b = time_adj;
+              ia_b = iter_adj;
+              last_chk = j;
               set_checkpoint_data(x_packed, q, j + 1, offset, total_time, time_adj, iter_adj);
               standardize_digits(x_int, q, n);
               pack_bits(x_int, x_packed, q, n);
@@ -3048,7 +3056,7 @@ check (int q)
 
 	    if( g_AID[0] && strncasecmp(g_AID, "N/A", 3) )
       { // If (AID is not empty), AND (AID is NOT "N/A") (case insensitive)
-        fprintf(fp, ", g_AID: %s\n", g_AID);
+        fprintf(fp, ", AID: %s\n", g_AID);
 	    }
       else fprintf(fp, "\n");
 	    unlock_and_fclose(fp);
