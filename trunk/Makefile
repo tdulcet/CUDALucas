@@ -1,5 +1,5 @@
 NAME = CUDALucas
-VERSION = 2.05 Beta
+VERSION = 2.05
 OptLevel = 3
 OUT = $(NAME)
 CUDA = /usr/local/cuda

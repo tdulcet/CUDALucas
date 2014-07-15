@@ -71,12 +71,14 @@ Prime95) and ported it to CUDA. This is now known as CUDALucas.
 
 Mr. Yamada remains the primary developer of the mathematics code. His username on
 MersenneForum.org is 'msft'. **no longer true, should put something about his other
-related work here.**
+related work here. I would like to give a brief history of CUDALucas development, who
+did what and when when, but I don't have the details and am not sure some of these
+details can be discovered.**
 
 The other GPU programs are mfaktc, a program using CUDA GPUs to perform the "trial
 factoring" mentioned above, and mfakto which is a port of mfaktc to OpenCL, supporting AMD/ATI graphics cards.
 (mfakto's developer maintains a GitHub page for it. Both programs are
-free-and-open-source software under the GPL.) **Include cudapm1, others?
+free-and-open-source software under the GPL.)
 
 To participate in GIMPS yourself using CUDALucas (assuming you have the
 necessary CUDA hardware listed above), all you need to do is go read section 4.
