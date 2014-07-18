@@ -3421,7 +3421,7 @@ int main (int argc, char *argv[])
 
   cufftbench_s = cufftbench_e = cufftbench_d = 0;
   cufftbench_m = g_cpi = g_ri = g_er = g_thr[0] = g_fftlen = g_pf = g_sl = g_sv = -1;
-  g_po = g_sf = g_df = g_ki = g_ro = g_th = g_ei = g_bc = g_rt = g_el = -1;
+  g_po = g_sf = g_df = g_ki = g_ro = g_th = g_ei = g_bc = g_rt = g_el = g_dn = -1;
   g_output_string[0] = g_output_header[0] = g_output_interval = g_folder[0] = -1;
   g_AID[0] = g_input_file[0] = g_RESULTSFILE[0] = 0; /* First character is null terminator */
 
