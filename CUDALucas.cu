@@ -3483,9 +3483,9 @@ void parse_args(int argc,
   	  fprintf (stderr, "$ CUDALucas -h|-v\n\n");
   	  fprintf (stderr, "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads t1 t2] [-c checkpoint_iteration] [-f fft_length] [-s folder] [-polite iteration] [-k] exponent|input_filename\n\n");
   	  fprintf (stderr, "$ CUDALucas [-d device_number] [-info] [-i inifile] [-threads t1 t2] -r [0|1]\n\n");
-  	  fprintf (stderr, "$ CUDALucas [-d device_number] -cufftbench start end passes\n\n");
-  	  fprintf (stderr, "$ CUDALucas [-d device_number] -threadbench start end passes mode\n\n");
-  	  fprintf (stderr, "$ CUDALucas [-d device_number] -memtest size passes\n\n");
+  	  fprintf (stderr, "$ CUDALucas [-d device_number] -cufftbench start end passes (see cudalucas.ini)\n\n");
+  	  fprintf (stderr, "$ CUDALucas [-d device_number] -threadbench start end passes mode (see cudalucas.ini)\n\n");
+  	  fprintf (stderr, "$ CUDALucas [-d device_number] -memtest size passes (see cudalucas.ini)\n\n");
       fprintf (stderr, "                       -h          print this help message\n");
       fprintf (stderr, "                       -v          print version number\n");
       fprintf (stderr, "                       -info       print device information\n");
@@ -3494,7 +3494,7 @@ void parse_args(int argc,
   	  fprintf (stderr, "                       -f          set fft length (if round off error then exit)\n");
   	  fprintf (stderr, "                       -s          save all checkpoint files\n");
   	  fprintf (stderr, "                       -polite     GPU is polite every n iterations (default -polite 0) (-polite 0 = GPU aggressive)\n");
- 	    fprintf (stderr, "                       -r          exec residue test.\n");
+ 	  fprintf (stderr, "                       -r          exec residue test.\n");
   	  fprintf (stderr, "                       -k          enable keys (see CUDALucas.ini for details.)\n\n");
   	  exit (2);
     }

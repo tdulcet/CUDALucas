@@ -1,12 +1,14 @@
 New in 2.05:
-   - MersenneForum user owftheevil implemented the bitshift for FFTs (thank you!!)
+   - MersenneForum user owftheevil implemented the bitshift for FFTs
 
-   - He was also kind enough to implement restarting from previous checkpoint with
-     a larger FFT in the case of errors.
+   - Restarting from previous checkpoint with a larger FFT in the case of errors
+     Occurs on the fly or via keyboard input
 
    - Exponents from 7500 to 1100000000, depending on the card's memory.
 
-   I've been forgetting what I've changed :P
+   - Cufftbench, threadbench and memtest
+
+   - ?
 
 New in 2.04:
    - The default results file has been changed to "results.txt".
