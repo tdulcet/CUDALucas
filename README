@@ -310,7 +310,7 @@ terminal will automatically close and you won't see the error message.)
                        written every n iterations.
 
 -f n<k|K|m|M>          sets fft length to n, n * 1024 (if k or K specified)
-                       , or n * 1048576 (if m or M specified). Values of n
+                       or n * 1048576 (if m or M specified). Values of n
                        that are not mutiples of 1024, or do not end in k,
                        K, m, or M will be rejected.
 
