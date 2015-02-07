@@ -1,18 +1,26 @@
 NAME = CUDALucas
 VERSION = 2.05
-OptLevel = 3
+OptLevel = 1
+
 OUT = $(NAME)
+
+# Make sure this points to your cuda installation
 CUDA = /usr/local/cuda
 
 CUC = $(CUDA)/bin/nvcc
 CULIB = $(CUDA)/lib64
 CUINC = $(CUDA)/include
-CUFLAGS = -O$(OptLevel)  --generate-code arch=compute_13,code=sm_13 --generate-code arch=compute_20,code=sm_20 --generate-code arch=compute_30,code=sm_30 --generate-code arch=compute_35,code=sm_35 --compiler-options=-Wall -I$(CUINC)
 
-# The nVidia CUDA Toolkit will provide both nvcc and the CUDA libraries. If you
-# follow their defaults, the necessary files will be installed in your PATH and
-# LDPATH. Otherwise, you'll need to manually insert their paths here.
+# In CUFLAGSS, make an entry: --generate-code arch=compute_XY,code=sm_XY
+# for any compute capability you want to support. Possibilities are
+# For cuda 4.2, XY = 13, 20, or 30
+# For cuda 5.0, XY = 13, 20, 30, or 35
+# For cuda 5.5, XY = 13, 20, 30, or 35
+# For cuda 6.0, XY = 13, 20, 30, 35, or 50
+# For cuda 6.5, XY = 13, 20, 30, 35, or 50
+# For cuda 7.0, XY = 20, 30, 35, 50, or 52
 
+CUFLAGS = -O$(OptLevel)  --generate-code arch=compute_35,code=sm_35 --compiler-options=-Wall -I$(CUINC)
 CC = gcc
 CFLAGS = -O$(OptLevel) -Wall
 

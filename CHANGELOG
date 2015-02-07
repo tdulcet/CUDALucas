@@ -1,14 +1,14 @@
-New in 2.05:
+New in 2.05:.
    - MersenneForum user owftheevil implemented the bitshift for FFTs
 
    - Restarting from previous checkpoint with a larger FFT in the case of errors
      Occurs on the fly or via keyboard input
 
-   - Exponents from 7500 to 1100000000, depending on the card's memory.
+   - Exponents from 7500 to 1100000000, depending on the card's memory
 
    - Cufftbench, threadbench and memtest
 
-   - ?
+   - Screen output is configurable.
 
 New in 2.04:
    - The default results file has been changed to "results.txt".
