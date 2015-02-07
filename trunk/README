@@ -486,7 +486,7 @@ checkpoint files instead of just themost recent ones.
 Suggested tests (copy and paste into a batch file).
 
  CUDALucas -cufftbench 1024 8192 5
- CUDALucas -threadbench 1024 8192 5
+ CUDALucas -threadbench 1024 8192 5 0
  CUDALucas -r 1
  CUDALucas 6972593
 
@@ -617,18 +617,18 @@ A Release numbers are X.XX, where the first number has now reached 2, and the
 
 - Automate BigCarry? (or just make it mandatory?)
 
-- Add an command line switch to automate initial setup and burn-in
+- Add a command line switch to automate initial setup and burn-in (-setup)
 
 - automatic primenet interaction (Eric Christenson is working on this for mfaktc) 
                              ^ specification draft exists
    **For now, use MISFIT-CULU by Scott Lemieux http://www.mersenneforum.org/misfit/
 
 - The security module that would be used would be closed source, to maintain
-    integrity of PrimeNet's data. GPL v3 does not allow to have parts of the
-    program to be closed source. Solution: We'll re-release under another
-    license. This is NOT the end of the GPL v3 version! We'll release future
-    versions of CUDALucas under GPL v3! We want CUDALucas being open source!
-    The only differences of the closed version will be the security module and
-    the license information.
+  integrity of PrimeNet's data. GPL v3 does not allow to have parts of the
+  program to be closed source. Solution: We'll re-release under another
+  license. This is NOT the end of the GPL v3 version! We'll release future
+  versions of CUDALucas under GPL v3! We want CUDALucas being open source!
+  The only differences of the closed version will be the security module and
+  the license information.
 
 

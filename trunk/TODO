@@ -1,6 +1,0 @@
-Bill and Jerry's list?
-6.  FEA: Add V5UserID and ComputerID ini file options for later use
-10. FEA: Extending 4, implement logging abilities. (I don't even understand this)
-
-18. BUG: error checking on memory allocations
-19. BUG: exit code cleanup and messages
