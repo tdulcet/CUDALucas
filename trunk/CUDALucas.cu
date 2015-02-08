@@ -2783,7 +2783,7 @@ check (int q)
   int error_flag;
   int error_reset = 1;
   int end = (q + 31) / 32;
-  float error_limit = (g_el - g_el / 8.0 * log (g_ei)/ log(100.0)) / 100.0;
+  float error_limit = (g_el - g_el / 8.0 * log ( (float) g_ei)/ log(100.0)) / 100.0;
   signal (SIGTERM, SetQuitting);
   signal (SIGINT, SetQuitting);
   do
@@ -3025,7 +3025,7 @@ check (int q)
       }
 	    else if (interact_result & 4)
       {
-        error_limit = (g_el - g_el / 8.0 * log (g_ei)/ log(100.0)) / 100.0;
+        error_limit = (g_el - g_el / 8.0 * log ( (float) g_ei)/ log(100.0)) / 100.0;
         //printf("%0.5f\n", error_limit);
       }
       interact_result = 0;

@@ -33,18 +33,19 @@ CFLAGS = /Ox /Oy /GL /W4 /fp:fast /nologo
 ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),4.0 4.1 4.2 5.0 5.5 6.0 6.5))
 	SMCODE += --generate-code arch=compute_13,code=sm_13
 	SMCODE += --generate-code arch=compute_20,code=sm_20
-	#SMCODE += --generate-code arch=compute_21,code=sm_21
 endif
 ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),4.2 5.0 5.5 6.0 6.5))
-	SMCODE += --generate-code arch=compute_30,code=sm_30
+     SMCODE += --generate-code arch=compute_30,code=sm_30
 endif
-ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),5.0 5.5 6.0 6.5))
-     #SMCODE += --generate-code arch=compute_35,code=sm_35
+ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),5.5 6.0 6.5))
+     SMCODE += --generate-code arch=compute_35,code=sm_35
+endif
+ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),6.0 6.5))
+     SMCODE += --generate-code arch=compute_32,code=sm_32
      SMCODE += --generate-code arch=compute_50,code=sm_50
 endif
 ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),6.5))
-     #SMCODE += --generate-code arch=compute_32,code=sm_32
-     #SMCODE += --generate-code arch=compute_52,code=sm_52
+     SMCODE += --generate-code arch=compute_52,code=sm_52
 endif
 
 ifeq ($(BIT),x64)
