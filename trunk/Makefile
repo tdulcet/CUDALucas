@@ -1,11 +1,11 @@
 NAME = CUDALucas
 VERSION = 2.05
-OptLevel = 1
+OptLevel = 3
 
 OUT = $(NAME)
 
 # Make sure this points to your cuda installation
-CUDA = /usr/local/cuda
+CUDA = /usr/local/cuda-5.5
 
 CUC = $(CUDA)/bin/nvcc
 CULIB = $(CUDA)/lib64
@@ -20,7 +20,7 @@ CUINC = $(CUDA)/include
 # For cuda 6.5, XY = 13, 20, 30, 35, or 50
 # For cuda 7.0, XY = 20, 30, 35, 50, or 52
 
-CUFLAGS = -O$(OptLevel)  --generate-code arch=compute_35,code=sm_35 --compiler-options=-Wall -I$(CUINC)
+CUFLAGS = -O$(OptLevel)  --generate-code arch=compute_20,code=sm_20 --compiler-options=-Wall -I$(CUINC)
 CC = gcc
 CFLAGS = -O$(OptLevel) -Wall
 
