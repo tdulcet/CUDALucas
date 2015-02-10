@@ -2975,7 +2975,7 @@ check (int q)
         reset_err(&maxerr, 0.25);
         error_reset = 1;
       }
-      else if(error_reset && (j % 100 == 0)) //error_flag & 2))
+      else if(error_reset && (error_flag & 3))
       {
           if(terr < temperr + 0.0001f)
           {
