@@ -7,7 +7,7 @@
 # code changes not in 3.2              #
 ########################################
 
-VER = 2.05
+VER = 2.05.1
 BIT = WIN32
 CUDA_VERSION = 5.5
 NAME = CUDALucas$(VER)-CUDA$(CUDA_VERSION)-Windows-$(BIT).exe
