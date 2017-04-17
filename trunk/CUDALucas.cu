@@ -1,4 +1,4 @@
-char program[] = "CUDALucas v2.05.1";
+char program[] = "CUDALucas v2.06beta";
 /* CUDALucas.c
    Shoichiro Yamada Oct. 2010
 
@@ -68,6 +68,8 @@ unsigned int *g_s;                //same information on device
 //unsigned int *g_s1;               //large product of ttp[grp]*ttp[col] information
 __constant__ double g_ttpinc[3];  //factors for obtaining weights of adjacent digits
 __constant__ int    g_qn[2];      //base size of bit values for each digit, adjusted by size data above
+int drv_ver;					  //CUDA Driver Version
+int rt_ver;						  //CUDA Run-Time Version
 
 cufftHandle    g_plan;
 cudaDeviceProp g_dev;             //structure holding device property information
@@ -720,23 +722,47 @@ void init_device (int device_number, int show_prop)
   if (device_number >= device_count)
   {
     printf ("device_number >=  device_count ... exiting\n");
-    printf ("(This is probably a driver problem)\n\n");
+    printf ("(If you didn't select a device\n");
+	printf ("this is probably a driver problem)\n\n");
     exit (2);
   }
   cudaSetDevice (device_number);
   cutilSafeCall(cudaSetDeviceFlags (cudaDeviceBlockingSync));
   cudaGetDeviceProperties (&g_dev, device_number);
-  // From Iain
-  if (g_dev.major == 1 && g_dev.minor < 3)
-  {
-    printf("A GPU with compute capability >= 1.3 is required for double precision arithmetic\n\n");
-	  printf("See http://www.mersenne.ca/cudalucas.php for a list of cards\n\n");
-    exit (2);
-  }
+  cudaRuntimeGetVersion(&rt_ver);
+  cudaDriverGetVersion(&drv_ver);
+  
+// From Iain
+if (g_dev.major == 1 && g_dev.minor < 3)
+	{
+	printf("A GPU with compute capability >= 1.3 is required for double precision arithmetic\n\n");
+		printf("See http://www.mersenne.ca/cudalucas.php for a list of cards\n\n");
+	exit (2);
+	}
+
+#if CUDART_VERSION >= 7000
+	if (g_dev.major == 1 && g_dev.minor <= 3)
+	{
+	printf("A GPU with compute capability >= 2.x is required for CUDA Versions >=7.0\n\n");
+		printf("See http://www.mersenne.ca/cudalucas.php for a list of cards\n\n");
+	exit (2);
+	}
+#endif
+
   if (show_prop)
   {
-    printf ("------- DEVICE %d -------\n",    device_number);
-    printf ("name                %s\n",       g_dev.name);
+    printf ("%s %d-bit build, compiled %s @ %s\n\n",    program,(int)(sizeof(void*)*8),__DATE__,__TIME__);
+	printf ("You may experience a small delay on 1st startup to ");
+	printf ("due to Just-in-Time Compilation\n\n"); 
+	//from mfaktc
+	printf("binary compiled for CUDA  %d.%d\n", CUDART_VERSION/1000, CUDART_VERSION%100);
+	printf("CUDA runtime version      %d.%d\n", rt_ver/1000, rt_ver%100);
+	printf("CUDA driver version       %d.%d\n\n", drv_ver/1000, drv_ver%100);
+	//from mfaktc
+
+	printf ("------- DEVICE %d -------\n",    device_number);
+	printf ("name                %s\n",       g_dev.name);
+	printf ("ECC Support?        %s\n",	      g_dev.ECCEnabled ? "Enabled" : "Disabled");
     printf ("Compatibility       %d.%d\n",    g_dev.major, g_dev.minor);
     printf ("clockRate (MHz)     %d\n",       g_dev.clockRate/1000);
     printf ("memClockRate (MHz)  %d\n",       g_dev.memoryClockRate/1000);
@@ -753,7 +779,9 @@ void init_device (int device_number, int show_prop)
     printf ("maxThreadsDim[3]    %d,%d,%d\n", g_dev.maxThreadsDim[0], g_dev.maxThreadsDim[1], g_dev.maxThreadsDim[2]);
     printf ("maxGridSize[3]      %d,%d,%d\n", g_dev.maxGridSize[0], g_dev.maxGridSize[1], g_dev.maxGridSize[2]);
     printf ("textureAlignment    %llu\n",     (unsigned long long) g_dev.textureAlignment);
-    printf ("deviceOverlap       %d\n\n",     g_dev.deviceOverlap);
+    printf ("deviceOverlap       %d\n",       g_dev.deviceOverlap);
+    printf ("pciDeviceID         %d\n",       g_dev.pciDeviceID);
+    printf ("pciBusID            %d\n\n",     g_dev.pciBusID);
   }
 }
 
@@ -1457,6 +1485,51 @@ unsigned long long find_residue(int *x_int, int q, int n, int offset)
   if(j == digit && x_int[digit] == 0) return(0);
   else if (x_int[j] < 0) carry = -1;
   for(j = 0; j < 10; j++)
+  {
+    tx = x_int[digit] + carry;
+    if (size(digit)) temp = hi;
+    else temp = lo;
+    if(tx < 0)
+    {
+      tx += temp;
+      carry = -1;
+    }
+    else carry = 0;
+    residue += (unsigned long long) tx << k;
+    k += q / n + size(digit);
+    if(j == 0)
+    {
+       k -= bit;
+       residue >>= bit;
+    }
+    if(k >= 64) break;
+    digit++;
+    if(digit == n) digit = 0;
+  }
+  return residue;
+}
+
+unsigned long long check_illegal_residue(int *x_int, int q, int n, int offset)
+{
+  int j, k = 0;
+  int digit, bit;
+  unsigned long long residue = 0;
+  int qn = q / n, carry = 0;
+  int lo = 1 << qn;
+  int hi = lo << 1;
+  int tx, temp;
+
+  digit = floor(offset * (n / (double) q));
+  bit = offset - ceil(digit * (q / (double) n));
+  j = (n + digit - 1) % n;
+  while(x_int[j] == 0 && j != digit)
+  {
+     j--;
+     if(j < 0) j += n;
+  }
+  if(j == digit && x_int[digit] == 0) return(0);
+  else if (x_int[j] < 0) carry = -1;
+  for(j = 0; j < n; j++)
   {
     tx = x_int[digit] + carry;
     if (size(digit)) temp = hi;
@@ -2481,7 +2554,7 @@ void cufftbench (int cufftbench_s, int cufftbench_e, int passes, int device_numb
     unlock_and_fclose(fptr);
     if(warning) printf("\nWARNING, the bounds were not both powers of two, results at either end may not be accurate.\n\n");
     printf("Old %s moved to %s.\n", fftfile, fftfile_bak);
-    printf("Optimal fft lengths saved in %s.\nPlease email a copy to james@mersenne.ca.\n", fftfile);
+    printf("Optimal fft lengths saved in %s.\nPlease consider submitting a benchmark at http:\\www.mersenne.ca/cudalucas.php.\n", fftfile);
     fflush(NULL);
   }
 
@@ -2904,6 +2977,19 @@ check (int q)
                 printf (", %5.2f%%\n", (float) j/q*100);
               }
               fflush (stdout);
+
+              if(residue == 0)
+              {
+                printf("Illegal residue: 0x0000000000000000. See mersenneforum.org for help.\n\n");
+                exit (2);
+              }
+              else
+                if(residue == 2 && check_illegal_residue(x_int, q, n, offset) == 2)
+                {
+                  printf("Illegal residue: 0x0000000000000002. See mersenneforum.org for help.\n\n");
+                  exit (2);
+                }
+
               last_chk = j;
               if(!error_reset) reset_err(&maxerr, g_er / 100.0f); // Instead of tracking maxerr over whole run, reset it at each checkpoint.
               if(fft_reset) // Larger fft fixed the error, reset fft and continue
