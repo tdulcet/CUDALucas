@@ -1,5 +1,5 @@
 NAME = CUDALucas
-VERSION = 2.05.1
+VERSION = 2.06
 OptLevel = 1
 
 OUT = $(NAME)

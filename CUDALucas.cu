@@ -1,4 +1,4 @@
-char program[] = "CUDALucas v2.06beta"; //do not change
+char program[] = "CUDALucas v2.06"; //do not change
 /* CUDALucas.c
    Shoichiro Yamada Oct. 2010
 
@@ -89,7 +89,6 @@ __constant__ double g_ttpinc[3];  //factors for obtaining weights of adjacent di
 __constant__ int    g_qn[2];      //base size of bit values for each digit, adjusted by size data above
 int drv_ver;					  //CUDA Driver Version
 int rt_ver;						  //CUDA Run-Time Version
-char uuid[80];					  //UUID from NVML
 
 cufftHandle    g_plan;
 cudaDeviceProp g_dev;             //structure holding device property information
@@ -751,17 +750,6 @@ void init_device (int device_number, int show_prop)
   cudaRuntimeGetVersion(&rt_ver);
   cudaDriverGetVersion(&drv_ver);
   
-  //NVML for UUID -- no error checking but we've established a GPU is present at this point
-  #ifndef WIN_ENVIRONMENT32 //no 32-bit win support for NVML
-	nvmlInit();
-	nvmlDevice_t device;		  
-	nvmlDeviceGetHandleByIndex(device_number, &device);
-	nvmlDeviceGetUUID(device, uuid, sizeof(uuid)/sizeof(uuid[0]));
-	nvmlShutdown();
-  #else
-	strcpy(uuid, "**64-bit only on Windows**"); //nVidia doesn't supply 32-bit nvml.dll for windows
-  #endif
-
 // From Iain
 if (g_dev.major == 1 && g_dev.minor < 3)
 	{
@@ -779,47 +767,45 @@ if (g_dev.major == 1 && g_dev.minor < 3)
 	}
 #endif
 
-/* FUTURE IMPLEMENTATION FOR CUDA THAT DOES NOT SUPPORT 2.x (can't believe I put this in ;) )
-#if CUDART_VERSION >= 8050	//CUDA >=8.5 Does not support compute_2.x
+#if CUDART_VERSION >= 9000	//CUDA >=9.0 Does not support compute_2.x
 	if (g_dev.major == 2)
 	{
-	printf("A GPU with compute capability >= 3.x is required for CUDA Versions >=8.5\n\n");
+	printf("A GPU with compute capability >= 3.x is required for CUDA Versions >=9.0\n\n");
 		printf("See http://www.mersenne.ca/cudalucas.php for a list of cards\n\n");
 	exit (2);
 	}
 #endif
-*/
+
 
   if (show_prop)
   {
 	printf ("%s %d-bit build, compiled %s @ %s\n\n",    program,(int)(sizeof(void*)*8),__DATE__,__TIME__);
 	
-	printf("binary compiled for CUDA  %d.%d\n", CUDART_VERSION/1000, CUDART_VERSION%100); //|
-	printf("CUDA runtime version      %d.%d\n", rt_ver/1000, rt_ver%100);				  //>from mfaktc
-	printf("CUDA driver version       %d.%d\n\n", drv_ver/1000, drv_ver%100);			  //|
-	printf ("------- DEVICE %d -------\n",    device_number);
-	printf ("name                %s\n",       g_dev.name);
-	printf ("UUID                %s\n",       uuid);
-	printf ("ECC Support?        %s\n",	      g_dev.ECCEnabled ? "Enabled" : "Disabled");
-	printf ("Compatibility       %d.%d\n",    g_dev.major, g_dev.minor);
-	printf ("clockRate (MHz)     %d\n",       g_dev.clockRate/1000);
-	printf ("memClockRate (MHz)  %d\n",       g_dev.memoryClockRate/1000);
-	printf ("totalGlobalMem      %llu\n",     (unsigned long long) g_dev.totalGlobalMem);
-	printf ("totalConstMem       %llu\n",     (unsigned long long) g_dev.totalConstMem);
-	printf ("l2CacheSize         %d\n",       g_dev.l2CacheSize);
-	printf ("sharedMemPerBlock   %llu\n",     (unsigned long long) g_dev.sharedMemPerBlock);
-	printf ("regsPerBlock        %d\n",       g_dev.regsPerBlock);
-	printf ("warpSize            %d\n",       g_dev.warpSize);
-	printf ("memPitch            %llu\n",     (unsigned long long) g_dev.memPitch);
-	printf ("maxThreadsPerBlock  %d\n",       g_dev.maxThreadsPerBlock);
-	printf ("maxThreadsPerMP     %d\n",       g_dev.maxThreadsPerMultiProcessor);
-	printf ("multiProcessorCount %d\n",       g_dev.multiProcessorCount);
-	printf ("maxThreadsDim[3]    %d,%d,%d\n", g_dev.maxThreadsDim[0], g_dev.maxThreadsDim[1], g_dev.maxThreadsDim[2]);
-	printf ("maxGridSize[3]      %d,%d,%d\n", g_dev.maxGridSize[0], g_dev.maxGridSize[1], g_dev.maxGridSize[2]);
-	printf ("textureAlignment    %llu\n",     (unsigned long long) g_dev.textureAlignment);
-	printf ("deviceOverlap       %d\n",       g_dev.deviceOverlap);
-	printf ("pciDeviceID         %d\n",       g_dev.pciDeviceID);
-	printf ("pciBusID            %d\n\n",     g_dev.pciBusID);
+	printf("binary compiled for CUDA   %d.%d\n", CUDART_VERSION/1000, CUDART_VERSION%100); //|
+	printf("CUDA runtime version       %d.%d\n", rt_ver/1000, rt_ver%100);				  //>from mfaktc
+	printf("CUDA driver version        %d.%d\n\n", drv_ver/1000, drv_ver%100);			  //|
+	printf ("---------------- DEVICE %d ----------------\n",    device_number);
+	printf ("Device Name               %s\n",       g_dev.name);
+	printf ("ECC Support?              %s\n",	      g_dev.ECCEnabled ? "Enabled" : "Disabled");
+	printf ("Compatibility             %d.%d\n",    g_dev.major, g_dev.minor);
+	printf ("clockRate (MHz)           %d\n",       g_dev.clockRate/1000);
+	printf ("memClockRate (MHz)        %d\n",       g_dev.memoryClockRate/1000);
+	printf ("totalGlobalMem            %llu\n",     (unsigned long long) g_dev.totalGlobalMem);
+	printf ("totalConstMem             %llu\n",     (unsigned long long) g_dev.totalConstMem);
+	printf ("l2CacheSize               %d\n",       g_dev.l2CacheSize);
+	printf ("sharedMemPerBlock         %llu\n",     (unsigned long long) g_dev.sharedMemPerBlock);
+	printf ("regsPerBlock              %d\n",       g_dev.regsPerBlock);
+	printf ("warpSize                  %d\n",       g_dev.warpSize);
+	printf ("memPitch                  %llu\n",     (unsigned long long) g_dev.memPitch);
+	printf ("maxThreadsPerBlock        %d\n",       g_dev.maxThreadsPerBlock);
+	printf ("maxThreadsPerMP           %d\n",       g_dev.maxThreadsPerMultiProcessor);
+	printf ("multiProcessorCount       %d\n",       g_dev.multiProcessorCount);
+	printf ("maxThreadsDim[3]          %d,%d,%d\n", g_dev.maxThreadsDim[0], g_dev.maxThreadsDim[1], g_dev.maxThreadsDim[2]);
+	printf ("maxGridSize[3]            %d,%d,%d\n", g_dev.maxGridSize[0], g_dev.maxGridSize[1], g_dev.maxGridSize[2]);
+	printf ("textureAlignment          %llu\n",     (unsigned long long) g_dev.textureAlignment);
+	printf ("deviceOverlap             %d\n",       g_dev.deviceOverlap);
+	printf ("pciDeviceID               %d\n",       g_dev.pciDeviceID);
+	printf ("pciBusID                  %d\n\n",     g_dev.pciBusID);
   }
 }
 

@@ -2,7 +2,7 @@
 # CUDALucas README #
 ####################
 
-CUDALucas v2.05.1
+CUDALucas v2.06
 
 Content
 
@@ -102,7 +102,8 @@ CUDALucas should run on all CUDA capable Nvidia GPUs with compute
 capability >= 1.3. Unfortunately this obviously excludes AMD/ATI GPUs, but
 there are other programs for such cards that you can use to help GIMPS
 (see section 0). 1.x is depreciated in CUDA 6.5 and may be removed from
-newer versions of CUDA
+newer versions of CUDA. 1.x is removed from CUDA >=7.0. 2.x is depreciated
+in CUDA 8.0 and 2.x is removed from CUDA >=9.0.
 
 
 #################
@@ -156,7 +157,7 @@ Detailed instructions for CUDA 4.0 to 5.0 are around on the internet
 (or PM flashjh on mersenneforum for info)
 ---------------------------------------------------------------------------
 
-How to create MSVS2012 solution from the latest Cudalucas 2.05, CUDA 6.5:
+How to create MSVS2012 solution from the latest Cudalucas 2.06, CUDA 6.5:
 
 ** You must have MSVS2012, the CUDA 5.5 Toolkit and current drivers
 installed first **
@@ -504,7 +505,7 @@ Advanced usage (set the FFT length):
      - Buy a new GPU :)
 
    The driver stop issue does not seem to cause bad results.  Many
-   successful tests were done with 2.05 Beta, CUDA 4.0 up to 6.5, 32 and 64
+   successful tests were done with 2.06 Beta, CUDA 4.0 up to 6.5, 32 and 64
    bit involving many stops, restarts, and forced FFT size changes. If
    you're experiencing the issue, just get a workaround going and you'll
    be ok.
@@ -616,7 +617,7 @@ Polite
 # 7 FAQ #
 #########
 
-Q. What's new in 2.05?
+Q. What's new in 2.06?
 
 A. - RCB
    - On-the-fly FFT selection.  Keyboard driven or automatic if error level
@@ -651,13 +652,13 @@ A. Yes!
 Q. Can I continue from an old version of CUDALucas to a new version without
    losing my spot in the check?
 
-A. No. Version 2.05 uses a different checkpoint file format from previous
+A. No. Version 2.06 uses a different checkpoint file format from previous
    versions, as well as a crc to ensure integrity of the data in the
    checkpoint file. Running CUDALucas in a directory with an old version
    of the checkpoint file will cause the test to restart at iteration 0,
    eventually replacing the old checkpoint files with new ones. Checkpoint
    files for versions 1.6x -- 2.04 should be interchangable. Complete your
-   check on the old version and then switch to 2.05
+   check on the old version and then switch to 2.06
 
 Q. Version numbers
 
@@ -691,13 +692,13 @@ A. Download the applicable lib files from SourceForge.  The files must
 # 8 To do #
 ###########
 
-2.06:
+2.07:
 - Add log capability
 
 - Much of the code is placed in the wrong functions, so the interface
   between functions is often extremely awkward. I'd like to fix this,
   especially since it will go a long way to adding log functionality for
-  2.06.
+  2.07.
 
 - Automate BigCarry? (or just make it mandatory?)
 

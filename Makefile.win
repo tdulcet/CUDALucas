@@ -1,32 +1,35 @@
-#################################################
-#BIT =  x64 or WIN32                            # 
-#CUDA = 4.0 4.1 4.2 5.0 5.5 6.0 6.5 7.0 7.5 8.0 #
-#VER =  As required                             #
-#################################################
+##########################################################
+#BIT =  x64 or WIN32                                     # 
+#CUDA = 4.0 4.1 4.2 5.0 5.5 6.0 6.5 7.0 7.5 8.0 9.2 10.1 #
+#VER =  As required                                      #
+##########################################################
+
+########################################
 # CUDA 3.2 no longer compiles due to   #
-# code changes not in 3.2              #
+# code changes not in CUDA 3.2         #
 # 32 bit not possible > CUDA 6.5       #
 # Due to dropped support by nVidia     #
 # CUDA >=7.0 does not support sm_1.x   #
-# CUDA >=8.0 sm_2.x deprecated         #
-# VS 2010 deprecated in > 7.5          #
+# CUDA =8.0 sm_2.x deprecated          #
+# CUDA >=9.0 does not support sm_2.x   #
+# VS 2010 deprecated in 7.5,8.0        #
+# VS 2010 not supported >=9.0          #
 ########################################
 
-VER = 2.06beta
+VER = 2.06
 BIT = x64
-CUDA_VERSION = 4.0
+CUDA_VERSION = 5.5
 NAME = CUDALucas$(VER)-CUDA$(CUDA_VERSION)-Windows-$(BIT).exe
 OUT = $(NAME)
 OptLevel = 1
 
 CUDA = C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v$(CUDA_VERSION)
 
-#### USEING JUST MSVS 2010 FOR NOW ###
-#ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),5.5 6.0 6.5 7.0 7.5 8.0)) 
-#	VCLOC = C:\Program Files (x86)\Microsoft Visual Studio 11.0
-#else
+ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),5.5 6.0 6.5 7.0 7.5 8.0 9.0 10.0 10.1)) 
+	VCLOC = C:\Program Files (x86)\Microsoft Visual Studio 11.0
+else
 	VCLOC = C:\Program Files (x86)\Microsoft Visual Studio 10.0
-#endif
+endif
 
 ifeq ($(BIT),x64)
 	CCLOC = "$(VCLOC)\VC\bin\amd64"
@@ -43,28 +46,36 @@ endif
 ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),4.0 4.1 4.2 5.0 5.5 6.0 6.5 7.0 7.5 8.0))
 	SMCODE += -gencode arch=compute_20,code=compute_20
 endif
-ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),4.2 5.0 5.5 6.0 6.5 7.0 7.5 8.0))
+ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),4.2 5.0 5.5 6.0 6.5 7.0 7.5 8.0 9.2 10.1)) # >=9.0 no longer support 1.x
 	SMCODE += -gencode arch=compute_30,code=compute_30
 endif
-ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),5.5 6.0 6.5 7.0 7.5 8.0))
+ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),5.5 6.0 6.5 7.0 7.5 8.0 9.2 10.1))
 	SMCODE += -gencode arch=compute_35,code=compute_35
 endif
-ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),6.0 6.5 7.0 7.5 8.0))
+ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),6.0 6.5 7.0 7.5 8.0 9.2 10.1))
 	SMCODE += -gencode arch=compute_32,code=compute_32 \
 	          -gencode arch=compute_50,code=compute_50
 endif
-ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),6.5 7.0 7.5 8.0))
+ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),6.5 7.0 7.5 8.0 9.2 10.1))
 	SMCODE += -gencode arch=compute_37,code=compute_37 \
 	          -gencode arch=compute_52,code=compute_52
 endif
-ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),7.5 8.0))
+ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),7.5 8.0 9.2 10.1))
 	SMCODE += -gencode arch=compute_53,code=compute_53
 endif
-ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),8.0))
+ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),8.0 9.2 10.1))
 	SMCODE += -gencode arch=compute_60,code=compute_60 \
 	          -gencode arch=compute_61,code=compute_61 \
 	          -gencode arch=compute_62,code=compute_62
 endif
+ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),9.2 10.1))
+	SMCODE += -gencode arch=compute_70,code=compute_70 \
+	          -gencode arch=compute_72,code=compute_72
+endif
+ifeq ($(CUDA_VERSION),$(filter $(CUDA_VERSION),10.1))
+	SMCODE += -gencode arch=compute_75,code=compute_75
+endif
+
 
 ifeq ($(BIT),x64)
 	NVCCFLAGS = -m64
